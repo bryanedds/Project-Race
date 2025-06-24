@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Blaze Vector Mmcc": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}
