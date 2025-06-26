@@ -107,7 +107,6 @@ type [<ReferenceEquality>] PhysicsEngine3d =
           CharacterUserData : Dictionary<CharacterID, CharacterUserData>
           Characters : Dictionary<BodyId, CharacterVirtual>
           VehicleConstraints : Dictionary<BodyId, VehicleConstraint>
-          StepListeners : Dictionary<BodyId, IPhysicsStepListener>
           mutable BodyUnoptimizedCreationCount : int
           BodyContactLock : obj
           BodyContactEvents : BodyContactEvent HashSet
@@ -686,8 +685,7 @@ type [<ReferenceEquality>] PhysicsEngine3d =
             physicsEngine.PhysicsContext.AddConstraint vehicleConstraint
 
             // register step listener
-            physicsEngine.StepListeners.Add (bodyId, vehicleConstraint)
-            physicsEngine.PhysicsContext.AddStepListener vehicleConstraint
+            physicsEngine.PhysicsContext.AddStepListenerViaVehicleConstraint vehicleConstraint
 
         // HACK: optimize broad phase if we've taken in a lot of bodies.
         // NOTE: Might cause some intemittent run-time pauses when adding bodies.
@@ -747,9 +745,7 @@ type [<ReferenceEquality>] PhysicsEngine3d =
             // attempt to destroy wheeled vehicle controller
             match physicsEngine.VehicleConstraints.TryGetValue bodyId with
             | (true, vehicleConstraint) ->
-                let stepListener = physicsEngine.StepListeners.[bodyId]
-                physicsEngine.PhysicsContext.RemoveStepListener stepListener                
-                physicsEngine.StepListeners.Remove bodyId |> ignore<bool>
+                physicsEngine.PhysicsContext.RemoveStepListenerViaVehicleConstraint vehicleConstraint
                 physicsEngine.PhysicsContext.RemoveConstraint vehicleConstraint
                 physicsEngine.VehicleConstraints.Remove bodyId |> ignore<bool>
                 vehicleConstraint.Dispose ()
@@ -1209,7 +1205,6 @@ type [<ReferenceEquality>] PhysicsEngine3d =
           CharacterUserData = dictPlus HashIdentity.Structural []
           Characters = dictPlus HashIdentity.Structural []
           VehicleConstraints = dictPlus HashIdentity.Structural []
-          StepListeners = dictPlus HashIdentity.Structural []
           BodyUnoptimizedCreationCount = 0
           BodyContactLock = bodyContactLock
           BodyContactEvents = bodyContactEvents
@@ -1461,11 +1456,6 @@ type [<ReferenceEquality>] PhysicsEngine3d =
             physicsEngine.BodyConstraintEvents.Clear ()
             physicsEngine.BodyConstraintUserData.Clear ()
             physicsEngine.BodyConstraints.Clear ()
-
-            // clear step listeners
-            for stepListener in physicsEngine.StepListeners.Values do
-                physicsEngine.PhysicsContext.RemoveStepListener stepListener
-            physicsEngine.StepListeners.Clear ()
 
             // clear wheeled vehicle controllers and vehicle constraints
             for vehicleConstraint in physicsEngine.VehicleConstraints.Values do
