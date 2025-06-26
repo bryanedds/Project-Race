@@ -21,6 +21,45 @@ module GameplayExtensions =
 type GameplayDispatcher () =
     inherit ScreenDispatcherImSim ()
 
+    static let createWheelSettingsWV front position =
+        let settings = new JoltPhysicsSharp.WheelSettingsWV ()
+        settings.Position <- position
+        settings.WheelForward <- v3Forward
+        settings.SuspensionSpring <- JoltPhysicsSharp.SpringSettings (JoltPhysicsSharp.SpringMode.FrequencyAndDamping, 3.0f, 0.5f)
+        if not front then
+            settings.MaxSteerAngle <- 0.0f
+            settings.MaxHandBrakeTorque <- 0.0f
+        settings
+
+    static let makeVehicleProperties () =
+
+        // vehicle controller config
+        let mutable differential = JoltPhysicsSharp.VehicleDifferentialSettings (LeftWheel = 0, RightWheel = 1)
+        let wheeledVehicleControllerSettings = new JoltPhysicsSharp.WheeledVehicleControllerSettings ()
+        wheeledVehicleControllerSettings.DifferentialsCount <- 1
+        wheeledVehicleControllerSettings.SetDifferential (0, differential)
+
+        // vehicle wheels config
+        let wheelSettings =
+            [|for i in 0 .. dec 4 do
+                let position =
+                    match i with
+                    | 0 -> v3 -0.8f 0.6f -3.0f // front left
+                    | 1 -> v3 0.8f 0.6f -3.0f // front right
+                    | 2 -> v3 -0.8f 0.6f 1.5f // back left
+                    | 3 -> v3 0.8f 0.6f 1.5f // back right
+                    | _ -> failwithumf ()
+                createWheelSettingsWV (i < 2) position :> JoltPhysicsSharp.WheelSettings|]
+
+        // vehicle constraint config
+        let vehicleConstraintSettings = new JoltPhysicsSharp.VehicleConstraintSettings ()
+        vehicleConstraintSettings.Forward <- v3Forward
+        vehicleConstraintSettings.Wheels <- wheelSettings
+        vehicleConstraintSettings.Controller <- wheeledVehicleControllerSettings
+
+        // fin
+        VehiclePropertiesJolt vehicleConstraintSettings
+
     // here we define default property values
     static member Properties =
         [define Screen.GameplayState Quit]
@@ -33,42 +72,36 @@ type GameplayDispatcher () =
 
             // process initialization
             let initializing = FQueue.contains Select selectionResults
-            let world =
-                if initializing
-                then World.mapRenderer3dConfig (fun config -> { config with SsrEnabled = true }) world
-                else world
+            if initializing then
+                World.mapRenderer3dConfig (fun config -> { config with SsrEnabled = true }) world
 
             // begin scene declaration
-            let world = World.beginGroupFromFile "Scene" "Assets/Gameplay/Scene.nugroup" [] world
+            World.beginGroupFromFile "Scene" "Assets/Gameplay/Scene.nugroup" [] world
 
             // declare player car
-            let world = World.doEntityFromFile "PlayerCar" "Assets/Gameplay/Cars/Sedan/Sedan.nuentity" [] world
+            World.doEntityFromFile "PlayerCar" "Assets/Gameplay/Cars/Sedan/Sedan.nuentity"
+                [if initializing then Entity.VehicleProperties @= makeVehicleProperties ()] world
             let playerCar = world.DeclaredEntity
             let playerCarBodyId = playerCar.GetBodyId world
-            let world =
-                if World.isKeyboardKeyDown KeyboardKey.Up world then World.setBodyVehicleForwardInput 10.0f playerCarBodyId world
-                elif World.isKeyboardKeyDown KeyboardKey.Down world then World.setBodyVehicleForwardInput -1.0f playerCarBodyId world
-                else World.setBodyVehicleForwardInput 0.0f playerCarBodyId world
-            let world =
-                if World.isKeyboardKeyDown KeyboardKey.Left world then World.setBodyVehicleRightInput -0.25f playerCarBodyId world
-                elif World.isKeyboardKeyDown KeyboardKey.Right world then World.setBodyVehicleRightInput 0.25f playerCarBodyId world
-                else World.setBodyVehicleRightInput 0.0f playerCarBodyId world
-            let world =
-                if World.isKeyboardKeyDown KeyboardKey.Space world
-                then World.setBodyVehicleBrakeInput 5.0f playerCarBodyId world
-                else World.setBodyVehicleBrakeInput 0.0f playerCarBodyId world
-            let world =
-                if World.isKeyboardKeyDown KeyboardKey.LCtrl world || World.isKeyboardKeyDown KeyboardKey.RCtrl world
-                then World.setBodyVehicleHandBrakeInput 5.0f playerCarBodyId world
-                else World.setBodyVehicleHandBrakeInput 0.0f playerCarBodyId world
-            let world =
-                if World.isKeyboardKeyDown KeyboardKey.R world
-                then World.setBodyRotation quatIdentity playerCarBodyId world
-                else world
+
+            if World.isKeyboardKeyDown KeyboardKey.Up world then World.setBodyVehicleForwardInput 10.0f playerCarBodyId world
+            elif World.isKeyboardKeyDown KeyboardKey.Down world then World.setBodyVehicleForwardInput -1.0f playerCarBodyId world
+            else World.setBodyVehicleForwardInput 0.0f playerCarBodyId world
+            if World.isKeyboardKeyDown KeyboardKey.Left world then World.setBodyVehicleRightInput -0.25f playerCarBodyId world
+            elif World.isKeyboardKeyDown KeyboardKey.Right world then World.setBodyVehicleRightInput 0.25f playerCarBodyId world
+            else World.setBodyVehicleRightInput 0.0f playerCarBodyId world
+            if World.isKeyboardKeyDown KeyboardKey.Space world
+            then World.setBodyVehicleBrakeInput 5.0f playerCarBodyId world
+            else World.setBodyVehicleBrakeInput 0.0f playerCarBodyId world
+            if World.isKeyboardKeyDown KeyboardKey.LCtrl world || World.isKeyboardKeyDown KeyboardKey.RCtrl world
+            then World.setBodyVehicleHandBrakeInput 5.0f playerCarBodyId world
+            else World.setBodyVehicleHandBrakeInput 0.0f playerCarBodyId world
+            if World.isKeyboardKeyDown KeyboardKey.R world
+            then World.setBodyRotation quatIdentity playerCarBodyId world
 
             // declare speed text
             let speed = (playerCar.GetLinearVelocity world).Magnitude
-            let world = World.doText "Speed" [Entity.Position .= v3 -232.0f -144.0f 0.0f; Entity.Text @= string (int (speed * 60.0f / 10.0f)) + " KPH"] world
+            World.doText "Speed" [Entity.Position .= v3 -232.0f -144.0f 0.0f; Entity.Text @= string (int (speed * 60.0f / 10.0f)) + " KPH"] world
 
             // update sun to shine over player car as snapped to shadow map's texel grid in shadow space. This is similar
             // in concept to - https://learn.microsoft.com/en-us/windows/win32/dxtecharts/common-techniques-to-improve-shadow-depth-maps?redirectedfrom=MSDN#moving-the-light-in-texel-sized-increments
@@ -86,24 +119,18 @@ type GameplayDispatcher () =
                     (floor (positionShadow.Y / shadowTexelSize) * shadowTexelSize)
                     (floor (positionShadow.Z / shadowTexelSize) * shadowTexelSize)
             let position = positionSnapped.Transform shadowViewInverse
-            let world = sun.SetPositionLocal position world
+            sun.SetPositionLocal position world
 
             // update eye to look at player while game is advancing
-            let world =
-                if world.Advancing then
-                    let position = Simulants.GameplayPlayerCar.GetPosition world
-                    let rotation = Simulants.GameplayPlayerCar.GetRotation world * Quaternion.CreateFromAxisAngle (v3Right, -0.1f)
-                    let world = World.setEye3dCenter (position + v3Up * 1.75f - rotation.Forward * 3.0f) world
-                    let world = World.setEye3dRotation rotation world
-                    world
-                else world
+            if world.Advancing then
+                let position = Simulants.GameplayPlayerCar.GetPosition world
+                let rotation = Simulants.GameplayPlayerCar.GetRotation world * Quaternion.CreateFromAxisAngle (v3Right, -0.1f)
+                World.setEye3dCenter (position + v3Up * 1.75f - rotation.Forward * 3.0f) world
+                World.setEye3dRotation rotation world
 
             // declare quit button
-            let (clicked, world) = World.doButton "Quit" [Entity.Position .= v3 232.0f -144.0f 0.0f; Entity.Text .= "Quit"] world
-            let world = if clicked then screen.SetGameplayState Quit world else world
+            if World.doButton "Quit" [Entity.Position .= v3 232.0f -144.0f 0.0f; Entity.Text .= "Quit"] world then
+                screen.SetGameplayState Quit world
 
             // end scene declaration
             World.endGroup world
-
-        // otherwise, no processing
-        else world

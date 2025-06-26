@@ -861,22 +861,22 @@ type [<ReferenceEquality>] private RenderTasks =
         if not lightingConfigChanged then
             let deferredStaticCached =
                 renderTasks.DeferredStatic.Count = renderTasksCached.DeferredStatic.Count &&
-                (renderTasks.DeferredStatic, renderTasksCached.DeferredStatic) ||>
-                Seq.forall2 (fun static_ staticCached ->
+                (renderTasks.DeferredStatic, renderTasksCached.DeferredStatic)
+                ||> Seq.forall2 (fun static_ staticCached ->
                     OpenGL.PhysicallyBased.PhysicallyBasedSurfaceFns.equals static_.Key staticCached.Key &&
-                    (static_.Value, staticCached.Value) ||>
-                    Seq.forall2 (fun struct (m, cs, _, _, _) struct (mCached, csCached, _, _, _) -> m4Eq m mCached && cs = csCached))
+                    (static_.Value, staticCached.Value)
+                    ||> Seq.forall2 (fun struct (m, cs, _, _, _) struct (mCached, csCached, _, _, _) -> m4Eq m mCached && cs = csCached))
             let deferredAnimatedCached =
                 renderTasks.DeferredAnimated.Count = renderTasksCached.DeferredAnimated.Count &&
-                (renderTasks.DeferredAnimated, renderTasksCached.DeferredAnimated) ||>
-                Seq.forall2 (fun animated animatedCached ->
+                (renderTasks.DeferredAnimated, renderTasksCached.DeferredAnimated)
+                ||> Seq.forall2 (fun animated animatedCached ->
                     AnimatedModelSurfaceKey.equals animated.Key animatedCached.Key &&
-                    (animated.Value, animatedCached.Value) ||>
-                    Seq.forall2 (fun struct (m, cs, _, _, _) struct (mCached, csCached, _, _, _) -> m4Eq m mCached && cs = csCached))
+                    (animated.Value, animatedCached.Value)
+                    ||> Seq.forall2 (fun struct (m, cs, _, _, _) struct (mCached, csCached, _, _, _) -> m4Eq m mCached && cs = csCached))
             let deferredTerrainsCached =
                 renderTasks.DeferredTerrains.Count = renderTasksCached.DeferredTerrains.Count &&
-                (renderTasks.DeferredTerrains, renderTasksCached.DeferredTerrains) ||>
-                Seq.forall2 (fun struct (terrainDescriptor, _) struct (terrainDescriptorCached, _) ->
+                (renderTasks.DeferredTerrains, renderTasksCached.DeferredTerrains)
+                ||> Seq.forall2 (fun struct (terrainDescriptor, _) struct (terrainDescriptorCached, _) ->
                     box3Eq terrainDescriptor.Bounds terrainDescriptorCached.Bounds &&
                     terrainDescriptor.CastShadow = terrainDescriptorCached.CastShadow &&
                     terrainDescriptor.HeightMap = terrainDescriptorCached.HeightMap)
@@ -1133,126 +1133,123 @@ type [<ReferenceEquality>] GlRenderer3d =
 
     static member private tryLoadRenderPackage packageName renderer =
 
-        // attempt to make new asset graph and load its assets
-        match AssetGraph.tryMakeFromFile Assets.Global.AssetGraphFilePath with
-        | Right assetGraph ->
-            match AssetGraph.tryCollectAssetsFromPackage (Some Constants.Associations.Render3d) packageName assetGraph with
-            | Right assetsCollected ->
+        // make a new asset graph and load its assets
+        let assetGraph = AssetGraph.makeFromFileOpt Assets.Global.AssetGraphFilePath
+        match AssetGraph.tryCollectAssetsFromPackage (Some Constants.Associations.Render3d) packageName assetGraph with
+        | Right assetsCollected ->
 
-                // log when image assets are being shared between 2d and 3d renders
-                if List.exists (fun (asset : Asset) ->
-                    let extension = PathF.GetExtensionLower asset.FilePath
-                    match extension with
-                    | ImageExtension _ ->
-                        asset.Associations.Contains Constants.Associations.Render2d &&
-                        asset.Associations.Contains Constants.Associations.Render3d
-                    | _ -> false)
-                    assetsCollected then
-                    Log.warnOnce "Due to asset graph limitations, associating image assets with both Render2d and Render3d is not fully supported."
+            // log when image assets are being shared between 2d and 3d renders
+            if List.exists (fun (asset : Asset) ->
+                let extension = PathF.GetExtensionLower asset.FilePath
+                match extension with
+                | ImageExtension _ ->
+                    asset.Associations.Contains Constants.Associations.Render2d &&
+                    asset.Associations.Contains Constants.Associations.Render3d
+                | _ -> false)
+                assetsCollected then
+                Log.warnOnce "Due to asset graph limitations, associating image assets with both Render2d and Render3d is not fully supported."
 
-                // find or create render package
-                let renderPackage =
-                    match Dictionary.tryFind packageName renderer.RenderPackages with
-                    | Some renderPackage -> renderPackage
-                    | None ->
-                        let assetClient =
-                            AssetClient
-                                (OpenGL.Texture.TextureClient (Some renderer.LazyTextureQueues),
-                                 OpenGL.CubeMap.CubeMapClient (),
-                                 OpenGL.PhysicallyBased.PhysicallyBasedSceneClient ())
-                        let renderPackage = { Assets = dictPlus StringComparer.Ordinal []; PackageState = assetClient }
-                        renderer.RenderPackages.[packageName] <- renderPackage
-                        renderPackage
+            // find or create render package
+            let renderPackage =
+                match Dictionary.tryFind packageName renderer.RenderPackages with
+                | Some renderPackage -> renderPackage
+                | None ->
+                    let assetClient =
+                        AssetClient
+                            (OpenGL.Texture.TextureClient (Some renderer.LazyTextureQueues),
+                                OpenGL.CubeMap.CubeMapClient (),
+                                OpenGL.PhysicallyBased.PhysicallyBasedSceneClient ())
+                    let renderPackage = { Assets = dictPlus StringComparer.Ordinal []; PackageState = assetClient }
+                    renderer.RenderPackages.[packageName] <- renderPackage
+                    renderPackage
 
-                // categorize existing assets based on the required action
-                let assetsExisting = renderPackage.Assets
-                let assetsToFree = Dictionary ()
-                let assetsToKeep = Dictionary ()
-                for assetEntry in assetsExisting do
-                    let assetName = assetEntry.Key
-                    let (lastWriteTime, asset, renderAsset) = assetEntry.Value
-                    let lastWriteTime' =
+            // categorize existing assets based on the required action
+            let assetsExisting = renderPackage.Assets
+            let assetsToFree = Dictionary ()
+            let assetsToKeep = Dictionary ()
+            for assetEntry in assetsExisting do
+                let assetName = assetEntry.Key
+                let (lastWriteTime, asset, renderAsset) = assetEntry.Value
+                let lastWriteTime' =
+                    try DateTimeOffset (File.GetLastWriteTime asset.FilePath)
+                    with exn -> Log.info ("Asset file write time read error due to: " + scstring exn); DateTimeOffset.MinValue.DateTime
+                if lastWriteTime < lastWriteTime'
+                then assetsToFree.Add (asset.FilePath, renderAsset)
+                else assetsToKeep.Add (assetName, (lastWriteTime, asset, renderAsset))
+
+            // free assets, including memo entries
+            for assetEntry in assetsToFree do
+                let filePath = assetEntry.Key
+                let renderAsset = assetEntry.Value
+                match renderAsset with
+                | RawAsset -> ()
+                | TextureAsset _ -> renderPackage.PackageState.TextureClient.Textures.Remove filePath |> ignore<bool>
+                | FontAsset _ -> ()
+                | CubeMapAsset (cubeMapKey, _, _) -> renderPackage.PackageState.CubeMapClient.CubeMaps.Remove cubeMapKey |> ignore<bool>
+                | StaticModelAsset _ | AnimatedModelAsset _ -> renderPackage.PackageState.SceneClient.Scenes.Remove filePath |> ignore<bool>
+                GlRenderer3d.freeRenderAsset renderAsset renderer
+
+            // categorize assets to load
+            let assetsToLoad = HashSet ()
+            for asset in assetsCollected do
+                if not (assetsToKeep.ContainsKey asset.AssetTag.AssetName) then
+                    assetsToLoad.Add asset |> ignore<bool>
+
+            // preload assets
+            renderPackage.PackageState.PreloadAssets (false, assetsToLoad)
+
+            // load assets
+            let assetsLoaded = Dictionary ()
+            for asset in assetsToLoad do
+                match GlRenderer3d.tryLoadRenderAsset renderPackage.PackageState asset renderer with
+                | Some renderAsset ->
+                    let lastWriteTime =
                         try DateTimeOffset (File.GetLastWriteTime asset.FilePath)
                         with exn -> Log.info ("Asset file write time read error due to: " + scstring exn); DateTimeOffset.MinValue.DateTime
-                    if lastWriteTime < lastWriteTime'
-                    then assetsToFree.Add (asset.FilePath, renderAsset)
-                    else assetsToKeep.Add (assetName, (lastWriteTime, asset, renderAsset))
+                    assetsLoaded.[asset.AssetTag.AssetName] <- (lastWriteTime, asset, renderAsset)
+                | None -> ()
 
-                // free assets, including memo entries
-                for assetEntry in assetsToFree do
-                    let filePath = assetEntry.Key
-                    let renderAsset = assetEntry.Value
-                    match renderAsset with
-                    | RawAsset -> ()
-                    | TextureAsset _ -> renderPackage.PackageState.TextureClient.Textures.Remove filePath |> ignore<bool>
-                    | FontAsset _ -> ()
-                    | CubeMapAsset (cubeMapKey, _, _) -> renderPackage.PackageState.CubeMapClient.CubeMaps.Remove cubeMapKey |> ignore<bool>
-                    | StaticModelAsset _ | AnimatedModelAsset _ -> renderPackage.PackageState.SceneClient.Scenes.Remove filePath |> ignore<bool>
-                    GlRenderer3d.freeRenderAsset renderAsset renderer
-
-                // categorize assets to load
-                let assetsToLoad = HashSet ()
-                for asset in assetsCollected do
-                    if not (assetsToKeep.ContainsKey asset.AssetTag.AssetName) then
-                        assetsToLoad.Add asset |> ignore<bool>
-
-                // preload assets
-                renderPackage.PackageState.PreloadAssets (false, assetsToLoad)
-
-                // load assets
-                let assetsLoaded = Dictionary ()
-                for asset in assetsToLoad do
-                    match GlRenderer3d.tryLoadRenderAsset renderPackage.PackageState asset renderer with
-                    | Some renderAsset ->
-                        let lastWriteTime =
-                            try DateTimeOffset (File.GetLastWriteTime asset.FilePath)
-                            with exn -> Log.info ("Asset file write time read error due to: " + scstring exn); DateTimeOffset.MinValue.DateTime
-                        assetsLoaded.[asset.AssetTag.AssetName] <- (lastWriteTime, asset, renderAsset)
-                    | None -> ()
-
-                // update assets to keep
-                let assetsUpdated =
-                    [|for assetEntry in assetsToKeep do
-                        let assetName = assetEntry.Key
-                        let (lastWriteTime, asset, renderAsset) = assetEntry.Value
-                        let dirPath = PathF.GetDirectoryName asset.FilePath
-                        let renderAsset =
-                            match renderAsset with
-                            | RawAsset | TextureAsset _ | FontAsset _ | CubeMapAsset _ ->
-                                renderAsset
-                            | StaticModelAsset (userDefined, staticModel) ->
-                                match staticModel.SceneOpt with
-                                | Some scene when not userDefined ->
-                                    let surfaces =
-                                        [|for surface in staticModel.Surfaces do
-                                            let material = scene.Materials.[surface.SurfaceMaterialIndex]
-                                            let (_, material) = OpenGL.PhysicallyBased.CreatePhysicallyBasedMaterial (true, dirPath, renderer.PhysicallyBasedMaterial, renderPackage.PackageState.TextureClient, material)
-                                            { surface with SurfaceMaterial = material }|]
-                                    StaticModelAsset (userDefined, { staticModel with Surfaces = surfaces })
-                                | Some _ | None -> renderAsset
-                            | AnimatedModelAsset animatedModel ->
-                                match animatedModel.SceneOpt with
-                                | Some scene ->
-                                    let surfaces =
-                                        [|for surface in animatedModel.Surfaces do
-                                            let material = scene.Materials.[surface.SurfaceMaterialIndex]
-                                            let (_, material) = OpenGL.PhysicallyBased.CreatePhysicallyBasedMaterial (true, dirPath, renderer.PhysicallyBasedMaterial, renderPackage.PackageState.TextureClient, material)
-                                            { surface with SurfaceMaterial = material }|]
-                                    AnimatedModelAsset { animatedModel with Surfaces = surfaces }
-                                | None -> renderAsset
-                        KeyValuePair (assetName, (lastWriteTime, asset, renderAsset))|]
-
-                // insert assets into package
-                for assetEntry in Seq.append assetsUpdated assetsLoaded do
+            // update assets to keep
+            let assetsUpdated =
+                [|for assetEntry in assetsToKeep do
                     let assetName = assetEntry.Key
                     let (lastWriteTime, asset, renderAsset) = assetEntry.Value
-                    renderPackage.Assets.[assetName] <- (lastWriteTime, asset, renderAsset)
+                    let dirPath = PathF.GetDirectoryName asset.FilePath
+                    let renderAsset =
+                        match renderAsset with
+                        | RawAsset | TextureAsset _ | FontAsset _ | CubeMapAsset _ ->
+                            renderAsset
+                        | StaticModelAsset (userDefined, staticModel) ->
+                            match staticModel.SceneOpt with
+                            | Some scene when not userDefined ->
+                                let surfaces =
+                                    [|for surface in staticModel.Surfaces do
+                                        let material = scene.Materials.[surface.SurfaceMaterialIndex]
+                                        let (_, material) = OpenGL.PhysicallyBased.CreatePhysicallyBasedMaterial (true, dirPath, renderer.PhysicallyBasedMaterial, renderPackage.PackageState.TextureClient, material)
+                                        { surface with SurfaceMaterial = material }|]
+                                StaticModelAsset (userDefined, { staticModel with Surfaces = surfaces })
+                            | Some _ | None -> renderAsset
+                        | AnimatedModelAsset animatedModel ->
+                            match animatedModel.SceneOpt with
+                            | Some scene ->
+                                let surfaces =
+                                    [|for surface in animatedModel.Surfaces do
+                                        let material = scene.Materials.[surface.SurfaceMaterialIndex]
+                                        let (_, material) = OpenGL.PhysicallyBased.CreatePhysicallyBasedMaterial (true, dirPath, renderer.PhysicallyBasedMaterial, renderPackage.PackageState.TextureClient, material)
+                                        { surface with SurfaceMaterial = material }|]
+                                AnimatedModelAsset { animatedModel with Surfaces = surfaces }
+                            | None -> renderAsset
+                    KeyValuePair (assetName, (lastWriteTime, asset, renderAsset))|]
 
-            // handle error cases
-            | Left failedAssetNames ->
-                Log.info ("Render package load failed due to unloadable assets '" + failedAssetNames + "' for package '" + packageName + "'.")
-        | Left error ->
-            Log.info ("Render package load failed due to unloadable asset graph due to: '" + error)
+            // insert assets into package
+            for assetEntry in Seq.append assetsUpdated assetsLoaded do
+                let assetName = assetEntry.Key
+                let (lastWriteTime, asset, renderAsset) = assetEntry.Value
+                renderPackage.Assets.[assetName] <- (lastWriteTime, asset, renderAsset)
+
+        // handle error cases
+        | Left failedAssetNames ->
+            Log.info ("Render package load failed due to unloadable assets '" + failedAssetNames + "' for package '" + packageName + "'.")
 
     static member private tryGetRenderAsset (assetTag : AssetTag) renderer =
         let mutable assetInfo = Unchecked.defaultof<DateTimeOffset * Asset * RenderAsset> // OPTIMIZATION: seems like TryGetValue allocates here if we use the tupling idiom (this may only be the case in Debug builds tho).
@@ -1509,14 +1506,14 @@ type [<ReferenceEquality>] GlRenderer3d =
                         if metadata.TextureWidth * metadata.TextureHeight = positionsAndTexCoordses.Length then
                             if not blockCompressed then
                                 let scalar = 1.0f / single Byte.MaxValue
-                                bytes |>
-                                Array.map (fun b -> single b * scalar) |>
-                                Array.chunkBySize 4 |>
-                                Array.map (fun b ->
+                                bytes
+                                |> Array.map (fun b -> single b * scalar)
+                                |> Array.chunkBySize 4
+                                |> Array.map (fun b ->
                                     let tangent = (v3 b.[2] b.[1] b.[0] * 2.0f - v3One).Normalized
                                     let normal = v3 tangent.X tangent.Z -tangent.Y
-                                    normal) |>
-                                Some
+                                    normal)
+                                |> Some
                             else Log.info "Block-compressed images not supported for terrain normal images."; None
                         else Log.info "Normal image resolution does not match terrain resolution."; None
                     | None -> Some (GlRenderer3d.createPhysicallyBasedTerrainNormals resolution positionsAndTexCoordses)
@@ -1531,11 +1528,11 @@ type [<ReferenceEquality>] GlRenderer3d =
                         if metadata.TextureWidth * metadata.TextureHeight = positionsAndTexCoordses.Length then
                             if not blockCompressed then
                                 let scalar = 1.0f / single Byte.MaxValue
-                                bytes |>
-                                Array.map (fun b -> single b * scalar) |>
-                                Array.chunkBySize 4 |>
-                                Array.map (fun b -> v3 b.[2] b.[1] b.[0]) |>
-                                Some
+                                bytes
+                                |> Array.map (fun b -> single b * scalar)
+                                |> Array.chunkBySize 4
+                                |> Array.map (fun b -> v3 b.[2] b.[1] b.[0])
+                                |> Some
                             else Log.info "Block-compressed images not supported for terrain tint images."; None
                         else Log.info "Tint image resolution does not match terrain resolution."; None
                     | None -> Some (Array.init positionsAndTexCoordses.Length (fun _ -> v3One))
@@ -2689,9 +2686,9 @@ type [<ReferenceEquality>] GlRenderer3d =
 
         // filter light maps according to enabledness and intersection with the geometry frustum
         let lightMaps =
-            renderTasks.LightMaps |>
-            Array.ofSeq |>
-            Array.filter (fun lightMap -> lightMap.SortableLightMapEnabled && geometryFrustum.Intersects lightMap.SortableLightMapBounds)
+            renderTasks.LightMaps
+            |> Array.ofSeq
+            |> Array.filter (fun lightMap -> lightMap.SortableLightMapEnabled && geometryFrustum.Intersects lightMap.SortableLightMapBounds)
 
         // sort light maps for deferred rendering relative to eye center
         let (lightMapOrigins, lightMapMins, lightMapSizes, lightMapAmbientColors, lightMapAmbientBrightnesses, lightMapIrradianceMaps, lightMapEnvironmentFilterMaps) =
@@ -3284,9 +3281,9 @@ type [<ReferenceEquality>] GlRenderer3d =
         // NOTE: this approach has O(n^2) complexity altho perhaps it could be optimized.
         let spotAndDirectionalLightsArray =
             Array.sortBy (fun struct (id, _, _, _, _, _) ->
-                renderer.RenderPasses2.Pairs |>
-                Seq.choose (fun (renderPass, renderTasks) -> match renderPass with ShadowPass (id2, faceInfoOpt, _, _, _) when id2 = id && faceInfoOpt.IsNone -> renderTasks.ShadowBufferIndexOpt | _ -> None) |>
-                Seq.headOrDefault Int32.MaxValue)
+                renderer.RenderPasses2.Pairs
+                |> Seq.choose (fun (renderPass, renderTasks) -> match renderPass with ShadowPass (id2, faceInfoOpt, _, _, _) when id2 = id && faceInfoOpt.IsNone -> renderTasks.ShadowBufferIndexOpt | _ -> None)
+                |> Seq.headOrDefault Int32.MaxValue)
                 spotAndDirectionalLightsArray
 
         // shadow texture pre-passes
@@ -3365,9 +3362,9 @@ type [<ReferenceEquality>] GlRenderer3d =
         // NOTE: this approach has O(n^2) complexity altho perhaps it could be optimized.
         let pointLightsArray =
             Array.sortBy (fun struct (id, _, _, _, _, _) ->
-                renderer.RenderPasses2.Pairs |>
-                Seq.choose (fun (renderPass, renderTasks) -> match renderPass with ShadowPass (id2, faceInfoOpt, _, _, _) when id2 = id && faceInfoOpt.IsSome -> renderTasks.ShadowBufferIndexOpt | _ -> None) |>
-                Seq.headOrDefault Int32.MaxValue)
+                renderer.RenderPasses2.Pairs
+                |> Seq.choose (fun (renderPass, renderTasks) -> match renderPass with ShadowPass (id2, faceInfoOpt, _, _, _) when id2 = id && faceInfoOpt.IsSome -> renderTasks.ShadowBufferIndexOpt | _ -> None)
+                |> Seq.headOrDefault Int32.MaxValue)
                 pointLightsArray
 
         // shadow map pre-passes
@@ -3572,10 +3569,10 @@ type [<ReferenceEquality>] GlRenderer3d =
                             for x in 0 .. dec Constants.Render.BrdfResolution do
                                 let nov = (single y + 0.5f) * (1.0f / single Constants.Render.BrdfResolution)
                                 let roughness = (single x + 0.5f) * (1.0f / single Constants.Render.BrdfResolution)
-                                GlRenderer3d.integrateBrdf nov roughness Constants.Render.BrdfSamples|] |>
-                        Array.map (fun v -> [|BitConverter.GetBytes v.X; BitConverter.GetBytes v.Y|]) |>
-                        Array.concat |>
-                        Array.concat
+                                GlRenderer3d.integrateBrdf nov roughness Constants.Render.BrdfSamples|]
+                        |> Array.map (fun v -> [|BitConverter.GetBytes v.X; BitConverter.GetBytes v.Y|])
+                        |> Array.concat
+                        |> Array.concat
                     File.WriteAllBytes (brdfFilePath, brdfBuffer)
                     brdfBuffer
             let brdfBufferPtr = GCHandle.Alloc (brdfBuffer, GCHandleType.Pinned)
