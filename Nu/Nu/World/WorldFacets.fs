@@ -7,6 +7,7 @@ open System.Collections.Generic
 open System.Numerics
 open ImGuiNET
 open TiledSharp
+open JoltPhysicsSharp
 open Prime
 open Nu
 open Nu.Particles
@@ -1484,6 +1485,12 @@ type RigidBodyFacet () =
         wheeledVehicleControllerSettings.Engine <- vehicleEngineSettings
         wheeledVehicleControllerSettings.Transmission <- vehicleTransmissionSettings
         wheeledVehicleControllerSettings.DifferentialLimitedSlipRatio <- 1.4f
+        wheeledVehicleControllerSettings.DifferentialsCount <- 1
+        let mutable differential = VehicleDifferentialSettings ()
+        differential.LeftWheel <- 0
+        differential.RightWheel <- 1
+        differential.LimitedSlipRatio <- wheeledVehicleControllerSettings.DifferentialLimitedSlipRatio
+        wheeledVehicleControllerSettings.SetDifferential (0, differential)
 
         // vehicle wheels config
         let wheelSettings =
