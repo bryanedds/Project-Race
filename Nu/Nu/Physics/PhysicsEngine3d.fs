@@ -685,7 +685,7 @@ type [<ReferenceEquality>] PhysicsEngine3d =
             physicsEngine.PhysicsContext.AddConstraint vehicleConstraint
 
             // register step listener
-            physicsEngine.PhysicsContext.AddStepListenerViaVehicleConstraint vehicleConstraint
+            physicsEngine.PhysicsContext.AddStepListener vehicleConstraint
 
         // HACK: optimize broad phase if we've taken in a lot of bodies.
         // NOTE: Might cause some intemittent run-time pauses when adding bodies.
@@ -745,7 +745,7 @@ type [<ReferenceEquality>] PhysicsEngine3d =
             // attempt to destroy wheeled vehicle controller
             match physicsEngine.VehicleConstraints.TryGetValue bodyId with
             | (true, vehicleConstraint) ->
-                physicsEngine.PhysicsContext.RemoveStepListenerViaVehicleConstraint vehicleConstraint
+                physicsEngine.PhysicsContext.RemoveStepListener vehicleConstraint
                 physicsEngine.PhysicsContext.RemoveConstraint vehicleConstraint
                 physicsEngine.VehicleConstraints.Remove bodyId |> ignore<bool>
                 vehicleConstraint.Dispose ()
