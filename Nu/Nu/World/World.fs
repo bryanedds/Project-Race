@@ -5,11 +5,15 @@ namespace Nu
 open System
 open System.Collections.Generic
 open System.Diagnostics
+open System.Numerics
 open System.Reflection
 open System.Threading
 open SDL2
 open Prime
 
+/// Nu initialization functions.
+/// NOTE: this is a type in order to avoid creating a module name that may clash with the namespace name in an
+/// interactive environment.
 [<AbstractClass; Sealed>]
 type Nu () =
 
@@ -82,6 +86,9 @@ type Nu () =
             WorldModule.destroy <- fun simulant world -> World.destroy simulant world
             WorldModule.getEmptyEffect <- fun () -> Effect.empty :> obj
 
+            // init entity module
+            WorldModuleEntity.LayoutFacetType <- typeof<LayoutFacet>
+
             // init user-defined initialization process
             let result = userInit ()
 
@@ -104,8 +111,9 @@ type Nu () =
     static member init () =
         Nu.initPlus (fun () -> ())
 
+/// Universal function definitions for the world (4/4).
 [<AutoOpen>]
-module WorldModule3 =
+module WorldModule4 =
 
     type World with
 
@@ -279,22 +287,27 @@ module WorldModule3 =
                 World.trySynchronize true simulant world
 
         /// Make the world.
-        static member makePlus plugin eventGraph jobGraph geometryViewport rasterViewport outerViewport dispatchers quadtree octree ambientState imGui physicsEngine2d physicsEngine3d rendererProcess audioPlayer activeGameDispatcher =
+        static member makePlus plugin eventGraph jobGraph geometryViewport rasterViewport outerViewport dispatchers quadtree octree worldConfig sdlDepsOpt imGui physicsEngine2d physicsEngine3d rendererPhysics3dOpt rendererProcess audioPlayer activeGameDispatcher =
             Nu.init () // ensure game engine is initialized
+            let symbolics = Symbolics.makeEmpty ()
+            let intrinsicOverlays = World.makeIntrinsicOverlays dispatchers.Facets dispatchers.EntityDispatchers
+            let overlayer = Overlayer.makeFromFileOpt intrinsicOverlays Assets.Global.OverlayerFilePath
+            let timers = Timers.make ()
+            let ambientState = AmbientState.make worldConfig.Imperative worldConfig.Accompanied worldConfig.Advancing worldConfig.FramePacing symbolics overlayer timers sdlDepsOpt
             let config = AmbientState.getConfig ambientState
             let entityStates = SUMap.makeEmpty HashIdentity.Structural config
             let groupStates = UMap.makeEmpty HashIdentity.Structural config
             let screenStates = UMap.makeEmpty HashIdentity.Structural config
             let gameState = GameState.make activeGameDispatcher
-            let rendererPhysics3d = new RendererPhysics3d ()
             let subsystems =
                 { ImGui = imGui
                   PhysicsEngine2d = physicsEngine2d
                   PhysicsEngine3d = physicsEngine3d
                   RendererProcess = rendererProcess
-                  RendererPhysics3d = rendererPhysics3d
+                  RendererPhysics3dOpt = rendererPhysics3dOpt
                   AudioPlayer = audioPlayer }
             let simulants = UMap.singleton HashIdentity.Structural config (Game :> Simulant) None
+            let entitiesIndexed = UMap.makeEmpty HashIdentity.Structural config
             let worldExtension =
                 { ContextImSim = Address.empty
                   DeclaredImSim = Address.empty
@@ -321,6 +334,7 @@ module WorldModule3 =
                   AmbientState = ambientState
                   Subsystems = subsystems
                   Simulants = simulants
+                  EntitiesIndexed = entitiesIndexed
                   WorldExtension = worldExtension }
             let worldState =
                 { worldState with
@@ -330,7 +344,7 @@ module WorldModule3 =
             world
 
         /// Make a world with stub dependencies.
-        static member makeStub config (plugin : NuPlugin) =
+        static member makeStub worldConfig (plugin : NuPlugin) =
 
             // make the world's event delegate
             let eventGraph =
@@ -338,7 +352,7 @@ module WorldModule3 =
                 let eventTracerOpt = if eventTracing then Some (Log.custom "Event") else None // NOTE: lambda expression is duplicated in multiple places...
                 let eventFilter = Constants.Engine.EventFilter
                 let globalSimulantGeneralized = { GsgAddress = atoa Game.GameAddress }
-                let eventConfig = if config.Imperative then Imperative else Functional
+                let eventConfig = if worldConfig.Imperative then Imperative else Functional
                 EventGraph.make eventTracerOpt eventFilter globalSimulantGeneralized eventConfig
 
             // make the default game dispatcher
@@ -368,17 +382,13 @@ module WorldModule3 =
             rendererProcess.Start imGui.Fonts None geometryViewport rasterViewport outerViewport // params implicate stub renderers
             let audioPlayer = StubAudioPlayer.make ()
 
-            // make the world's ambient state
-            let symbolics = Symbolics.makeEmpty ()
-            let timers = Timers.make ()
-            let ambientState = AmbientState.make config.Imperative config.Accompanied true false symbolics Overlayer.empty timers None
-
             // make the world's spatial trees
             let quadtree = Quadtree.make Constants.Engine.QuadtreeDepth Constants.Engine.QuadtreeSize
             let octree = Octree.make Constants.Engine.OctreeDepth Constants.Engine.OctreeSize
 
             // make the world
-            let world = World.makePlus plugin eventGraph jobGraph geometryViewport rasterViewport outerViewport dispatchers quadtree octree ambientState imGui physicsEngine2d physicsEngine3d rendererProcess audioPlayer (snd defaultGameDispatcher)
+            let world =
+                World.makePlus plugin eventGraph jobGraph geometryViewport rasterViewport outerViewport dispatchers quadtree octree worldConfig None imGui physicsEngine2d physicsEngine3d None rendererProcess audioPlayer (snd defaultGameDispatcher)
 
             // register the game
             World.registerGame Game world
@@ -392,7 +402,7 @@ module WorldModule3 =
             // create asset graph
             let assetGraph = AssetGraph.makeFromFileOpt Assets.Global.AssetGraphFilePath
 
-            // compute initial pacakges
+            // compute initial packages
             let initialPackages = Assets.Default.PackageName :: plugin.InitialPackages
 
             // initialize metadata and load initial package
@@ -445,6 +455,7 @@ module WorldModule3 =
             let imGui = ImGui (false, outerViewport.Bounds.Size)
             let physicsEngine2d = PhysicsEngine2d.make (Constants.Physics.GravityDefault * Constants.Engine.Meter2d)
             let physicsEngine3d = PhysicsEngine3d.make Constants.Physics.GravityDefault
+            let rendererPhysics3dOpt = new RendererPhysics3d ()
             let rendererProcess =
                 if Constants.Engine.RunSynchronously
                 then RendererInline () :> RendererProcess
@@ -460,22 +471,14 @@ module WorldModule3 =
                 else StubAudioPlayer.make () :> AudioPlayer
             for package in initialPackages do
                 audioPlayer.EnqueueMessage (LoadAudioPackageMessage package)
-            let symbolics = Symbolics.makeEmpty ()
-
-            // attempt to make the overlayer
-            let intrinsicOverlays = World.makeIntrinsicOverlays dispatchers.Facets dispatchers.EntityDispatchers
-            let overlayer = Overlayer.makeFromFileOpt intrinsicOverlays Assets.Global.OverlayerFilePath
-
-            // make the world's ambient state
-            let timers = Timers.make ()
-            let ambientState = AmbientState.make config.Imperative config.Accompanied config.Advancing config.FramePacing symbolics overlayer timers (Some sdlDeps)
 
             // make the world's spatial trees
             let quadtree = Quadtree.make Constants.Engine.QuadtreeDepth Constants.Engine.QuadtreeSize
             let octree = Octree.make Constants.Engine.OctreeDepth Constants.Engine.OctreeSize
 
             // make the world
-            let world = World.makePlus plugin eventGraph jobGraph geometryViewport rasterViewport outerViewport dispatchers quadtree octree ambientState imGui physicsEngine2d physicsEngine3d rendererProcess audioPlayer activeGameDispatcher
+            let world =
+                World.makePlus plugin eventGraph jobGraph geometryViewport rasterViewport outerViewport dispatchers quadtree octree config (Some sdlDeps) imGui physicsEngine2d physicsEngine3d (Some rendererPhysics3dOpt) rendererProcess audioPlayer activeGameDispatcher
 
             // add the keyed values
             for (key, value) in plugin.MakeKeyedValues world do
@@ -492,7 +495,7 @@ module WorldModule3 =
             | Right sdlDeps ->
                 use sdlDeps = sdlDeps // bind explicitly to dispose automatically
                 let world = World.make sdlDeps worldConfig geometryViewport rasterViewport outerViewport plugin
-                World.runWithCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess Live true world
+                World.runWithCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess true world
             | Left error -> Log.error error; Constants.Engine.ExitCodeFailure
 
         /// Run the game engine, initializing dependencies as indicated by WorldConfig, and returning exit code upon

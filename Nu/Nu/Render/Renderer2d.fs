@@ -202,7 +202,11 @@ type [<ReferenceEquality>] GlRenderer2d =
         GlRenderer2d.invalidateCaches renderer
         match PathF.GetExtensionLower asset.FilePath with
         | ImageExtension _ ->
-            match assetClient.TextureClient.TryCreateTextureUnfiltered (false, asset.FilePath) with
+            let textureEir =
+                if OpenGL.Texture.Filtered2d asset.FilePath
+                then assetClient.TextureClient.TryCreateTextureFiltered (false, false, asset.FilePath)
+                else assetClient.TextureClient.TryCreateTextureUnfiltered (false, asset.FilePath)
+            match textureEir with
             | Right texture ->
                 Some (TextureAsset texture)
             | Left error ->
@@ -907,8 +911,12 @@ type [<ReferenceEquality>] GlRenderer2d =
                 GlRenderer2d.render eyeCenter eyeSize viewport renderMessages renderer
 
         member renderer.CleanUp () =
+
+            // destroy sprite batch env
             OpenGL.SpriteBatch.DestroySpriteBatchEnv renderer.SpriteBatchEnv
             OpenGL.Hl.Assert ()
+
+            // free resources
             let renderPackages = renderer.RenderPackages |> Seq.map (fun entry -> entry.Value)
             let renderAssets = renderPackages |> Seq.map (fun package -> package.Assets.Values) |> Seq.concat
             for (_, _, renderAsset) in renderAssets do GlRenderer2d.freeRenderAsset renderAsset renderer

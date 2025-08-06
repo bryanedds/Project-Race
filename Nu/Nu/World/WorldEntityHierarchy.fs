@@ -10,7 +10,7 @@ open Prime
 open Nu
 
 [<AutoOpen>]
-module WorldEntityHierarchy =
+module WorldEntityHierarchyExtensions =
 
     type Entity with
 
@@ -111,6 +111,7 @@ module WorldEntityHierarchy =
                             let opaqueDistance = OpenGL.PhysicallyBased.PhysicallyBasedSurfaceFns.extractOpaqueDistance Constants.Render.OpaqueDistanceDefault staticModelMetadata.SceneOpt surface
                             let finenessOffset = OpenGL.PhysicallyBased.PhysicallyBasedSurfaceFns.extractFinenessOffset Constants.Render.FinenessOffsetDefault staticModelMetadata.SceneOpt surface
                             let scatterType = OpenGL.PhysicallyBased.PhysicallyBasedSurfaceFns.extractScatterType Constants.Render.ScatterTypeDefault staticModelMetadata.SceneOpt surface
+                            let specularScalar = OpenGL.PhysicallyBased.PhysicallyBasedSurfaceFns.extractSpecularScalar Constants.Render.SpecularScalarDefault staticModelMetadata.SceneOpt surface
                             child.SetPositionLocal position world
                             child.SetRotationLocal rotation world
                             child.SetScaleLocal scale world
@@ -129,7 +130,8 @@ module WorldEntityHierarchy =
                                   IgnoreLightMapsOpt = ValueSome ignoreLightMaps
                                   OpaqueDistanceOpt = ValueSome opaqueDistance
                                   FinenessOffsetOpt = ValueSome finenessOffset
-                                  ScatterTypeOpt = ValueSome scatterType }
+                                  ScatterTypeOpt = ValueSome scatterType
+                                  SpecularScalarOpt = ValueSome specularScalar }
                             child.SetMaterialProperties properties world
                             let material =
                                 if surfaceMaterialsPopulated then
@@ -143,7 +145,8 @@ module WorldEntityHierarchy =
                                       SubdermalImageOpt = Metadata.tryGetStaticModelSubdermalImage surface.SurfaceMaterialIndex staticModel
                                       FinenessImageOpt = Metadata.tryGetStaticModelFinenessImage surface.SurfaceMaterialIndex staticModel
                                       ScatterImageOpt = Metadata.tryGetStaticModelScatterImage surface.SurfaceMaterialIndex staticModel
-                                      TwoSidedOpt = Metadata.tryGetStaticModelTwoSided surface.SurfaceMaterialIndex staticModel }
+                                      TwoSidedOpt = Metadata.tryGetStaticModelTwoSided surface.SurfaceMaterialIndex staticModel
+                                      ClippedOpt = Metadata.tryGetStaticModelClipped surface.SurfaceMaterialIndex staticModel }
                                 else Material.empty
                             child.SetMaterial material world
                             child.SetRenderStyle renderStyle world
@@ -156,7 +159,10 @@ module WorldEntityHierarchy =
         static member freezeEntityHierarchy surfaceMaterialsPopulated (parent : Entity) world =
             let mutable boundsOpt = Option<Box3>.None // using mutation because I was in a big hurry when I wrote this
             let frozenEntities = List ()
-            let frozenSurfaces = List ()
+            let frozenBundles =
+                Dictionary<
+                    bool * Material * OpenGL.PhysicallyBased.PhysicallyBasedSurface * DepthTest * RenderType,
+                    Guid * StaticModel AssetTag * int * (Matrix4x4 * bool * Presence * Box2 * MaterialProperties * Box3) List> ()
             let frozenShapes = List ()
             let rec getFrozenArtifacts (entity : Entity) =
                 if entity <> parent then
@@ -176,11 +182,15 @@ module WorldEntityHierarchy =
                             let surfaceIndex = entity.GetSurfaceIndex world
                             let depthTest = entity.GetDepthTest world
                             let renderType = match entity.GetRenderStyle world with Deferred -> DeferredRenderType | Forward (subsort, sort) -> ForwardRenderType (subsort, sort)
-                            let surface = { CastShadow = castShadow; ModelMatrix = affineMatrix; Presence = presence; InsetOpt = insetOpt; MaterialProperties = properties; Material = material; SurfaceIndex = surfaceIndex; StaticModel = staticModel; DepthTest = depthTest; RenderType = renderType }
-                            let frozenSurface = StructPair.make entityBounds surface
                             boundsOpt <- match boundsOpt with Some bounds -> Some (bounds.Combine entityBounds) | None -> Some entityBounds
                             frozenEntities.Add entity
-                            frozenSurfaces.Add frozenSurface
+                            let metadata = Metadata.getStaticModelMetadata staticModel
+                            let surface = metadata.Surfaces.[surfaceIndex]
+                            let frozenKey = (material.Clipped, material, surface, depthTest, renderType)
+                            let frozenValue = (affineMatrix, castShadow, presence, Option.defaultValue box2Zero insetOpt, properties, entityBounds)
+                            match frozenBundles.TryGetValue frozenKey with
+                            | (true, (_, _, _, bundle)) -> bundle.Add frozenValue
+                            | (false, _) -> frozenBundles.Add (frozenKey, (Gen.id, staticModel, surfaceIndex, List [frozenValue]))
                             if entity.GetBodyFreezableWhenSurfaceFreezable world then
                                 let affine = Affine.make (entity.GetPosition world) (entity.GetRotation world) (entity.GetScale world)
                                 let navShape = entity.GetNavShape world
@@ -197,6 +207,7 @@ module WorldEntityHierarchy =
                             let insetOpt = match entity.GetInsetOpt world with Some inset -> Some inset | None -> None // OPTIMIZATION: localize boxed value in memory.
                             let properties = entity.GetMaterialProperties world
                             let staticModel = entity.GetStaticModel world
+                            let clipped = entity.GetClipped world
                             let depthTest = entity.GetDepthTest world
                             let metadata = Metadata.getStaticModelMetadata (entity.GetStaticModel world)
                             let mutable surfaceIndex = 0
@@ -225,12 +236,17 @@ module WorldEntityHierarchy =
                                           SubdermalImageOpt = Metadata.tryGetStaticModelSubdermalImage surface.SurfaceMaterialIndex staticModel
                                           FinenessImageOpt = Metadata.tryGetStaticModelFinenessImage surface.SurfaceMaterialIndex staticModel
                                           ScatterImageOpt = Metadata.tryGetStaticModelScatterImage surface.SurfaceMaterialIndex staticModel
-                                          TwoSidedOpt = Metadata.tryGetStaticModelTwoSided surface.SurfaceMaterialIndex staticModel }
+                                          TwoSidedOpt = Metadata.tryGetStaticModelTwoSided surface.SurfaceMaterialIndex staticModel
+                                          ClippedOpt = Metadata.tryGetStaticModelClipped surface.SurfaceMaterialIndex staticModel }
                                     else Material.empty
-                                let surface = { CastShadow = castShadow; ModelMatrix = surfaceMatrix; Presence = presence; InsetOpt = insetOpt; MaterialProperties = properties; Material = material; SurfaceIndex = surfaceIndex; StaticModel = staticModel; DepthTest = depthTest; RenderType = renderType }
-                                let frozenSurface = StructPair.make surfaceBounds surface                                
                                 boundsOpt <- match boundsOpt with Some bounds -> Some (bounds.Combine surfaceBounds) | None -> Some surfaceBounds
-                                frozenSurfaces.Add frozenSurface
+                                let metadata = Metadata.getStaticModelMetadata staticModel
+                                let surface = metadata.Surfaces.[surfaceIndex]
+                                let frozenKey = (clipped, material, surface, depthTest, renderType)
+                                let frozenValue = (affineMatrix, castShadow, presence, Option.defaultValue box2Zero insetOpt, properties, surfaceBounds)
+                                match frozenBundles.TryGetValue frozenKey with
+                                | (true, (_, _, _, bundle)) -> bundle.Add frozenValue
+                                | (false, _) -> frozenBundles.Add (frozenKey, (Gen.id, staticModel, surfaceIndex, List [frozenValue]))
                                 if entity.GetBodyFreezableWhenSurfaceFreezable world then
                                     let affine = Affine.make (entity.GetPosition world) (entity.GetRotation world) (entity.GetScale world)
                                     let navShape = entity.GetNavShape world
@@ -256,7 +272,21 @@ module WorldEntityHierarchy =
             | None ->
                 parent.SetSize v3One world
                 parent.SetOffset v3Zero world
-            (Array.ofSeq frozenSurfaces, Array.ofSeq frozenShapes, world)
+            let frozenBundles =
+                frozenBundles
+                |> Seq.map (fun entry ->
+                    let (clipped, material, _, depthTest, renderType) = entry.Key
+                    let (bundleId, staticModel, surfaceIndex, bundle) = entry.Value
+                    { BundleId = bundleId
+                      StaticModelSurfaces = Seq.toArray bundle
+                      Material = material
+                      StaticModel = staticModel
+                      SurfaceIndex = surfaceIndex
+                      Clipped = clipped
+                      DepthTest = depthTest
+                      RenderType = renderType })
+                |> Seq.toArray
+            (frozenBundles, Array.ofSeq frozenShapes, world)
 
         /// Attempt to thaw an entity hierarchy where certain types of children's rendering functionality were baked
         /// into a manually renderable array.
@@ -278,12 +308,12 @@ module WorldEntityHierarchy =
             parent.SetOffset v3Zero world
 
 [<AutoOpen>]
-module Freezer3dFacetModule =
+module Freezer3dFacetExtensions =
 
     type Entity with
-        member this.GetFrozenSurfaces world : StructPair<Box3, StaticModelSurfaceValue> array = this.Get (nameof this.FrozenSurfaces) world
-        member this.SetFrozenSurfaces (value : StructPair<Box3, StaticModelSurfaceValue> array) world = this.Set (nameof this.FrozenSurfaces) value world
-        member this.FrozenSurfaces = lens (nameof this.FrozenSurfaces) this this.GetFrozenSurfaces this.SetFrozenSurfaces
+        member this.GetFrozenBundles world : StaticModelSurfaceBundle array = this.Get (nameof this.FrozenBundles) world
+        member this.SetFrozenBundles (value : StaticModelSurfaceBundle array) world = this.Set (nameof this.FrozenBundles) value world
+        member this.FrozenBundles = lens (nameof this.FrozenBundles) this this.GetFrozenBundles this.SetFrozenBundles
         member this.GetFrozenShapes world : (Box3 * Matrix4x4 * StaticModel AssetTag * int * NavShape * Affine * BodyShape) array = this.Get (nameof this.FrozenShapes) world
         member this.SetFrozenShapes (value : (Box3 * Matrix4x4 * StaticModel AssetTag * int * NavShape * Affine * BodyShape) array) world = this.Set (nameof this.FrozenShapes) value world
         member this.FrozenShapes = lens (nameof this.FrozenShapes) this this.GetFrozenShapes this.SetFrozenShapes
@@ -296,6 +326,9 @@ module Freezer3dFacetModule =
         member this.GetSurfaceMaterialsPopulated world : bool = this.Get (nameof this.SurfaceMaterialsPopulated) world
         member this.SetSurfaceMaterialsPopulated (value : bool) world = this.Set (nameof this.SurfaceMaterialsPopulated) value world
         member this.SurfaceMaterialsPopulated = lens (nameof this.SurfaceMaterialsPopulated) this this.GetSurfaceMaterialsPopulated this.SetSurfaceMaterialsPopulated
+        member this.GetIgnoreGlobalFreezerCommands world : bool = this.Get (nameof this.IgnoreGlobalFreezerCommands) world
+        member this.SetIgnoreGlobalFreezerCommands (value : bool) world = this.Set (nameof this.IgnoreGlobalFreezerCommands) value world
+        member this.IgnoreGlobalFreezerCommands = lens (nameof this.IgnoreGlobalFreezerCommands) this this.GetIgnoreGlobalFreezerCommands this.SetIgnoreGlobalFreezerCommands
 
         member internal this.RegisterFrozenShapesNav world =
             let mutable index = 0
@@ -361,8 +394,8 @@ module Freezer3dFacetModule =
         member internal this.UpdateFrozenHierarchy world =
             if this.GetFrozen world then
                 let surfaceMaterialsPopulated = this.GetSurfaceMaterialsPopulated world
-                let (frozenSurfaces, frozenShapes, world) = World.freezeEntityHierarchy surfaceMaterialsPopulated this world
-                this.SetFrozenSurfaces frozenSurfaces world
+                let (frozenBundles, frozenShapes, world) = World.freezeEntityHierarchy surfaceMaterialsPopulated this world
+                this.SetFrozenBundles frozenBundles world
                 this.SetStatic true world
                 if this.GetSelected world then this.UnregisterFrozenShapes world
                 this.SetFrozenShapes frozenShapes world
@@ -371,7 +404,7 @@ module Freezer3dFacetModule =
                 if this.GetSelected world then this.UnregisterFrozenShapes world
                 this.SetFrozenShapes [||] world
                 this.SetStatic false world
-                this.SetFrozenSurfaces [||] world
+                this.SetFrozenBundles [||] world
                 World.thawEntityHierarchy (this.GetPresenceConferred world) this world
 
         /// Permanently freeze a freezer entity's descendents by freezing and then destroying them.
@@ -385,239 +418,169 @@ module Freezer3dFacetModule =
                 if descendent.GetExists world && descendent.GetSurfaceFreezable world then
                     World.destroyEntityImmediate descendent world
 
-        /// Permanently split a freezer entity's descendents into more spatially-coherent freezers.
-        member this.Permasplit world =
-            let splitParent =
-                match this.Parent with
-                | :? Group as group -> group / (this.Name + "Split")
-                | :? Entity as entity -> entity / (this.Name + "Split")
-                | _ -> failwithumf ()
-            let descendents =
-                this.GetDescendants world
-                |> Array.ofSeq
-                |> Array.sortByDescending (fun descendant -> descendant.Names.Length)
-            if splitParent.GetExists world then
-                Log.error ("Failed to permasplit due to already existing entity '" + scstring splitParent + ".")
-            elif Array.exists (fun (descendent : Entity) -> descendent.GetProtected world) descendents then
-                Log.error "Failed to permasplit due to protected entity in existing hierarchy."
-            else
-                let frozen = this.GetFrozen world
-                let presence = this.GetPresence world
-                let presenceConferred = this.GetPresenceConferred world
-                let surfaceMaterialsPopulated = this.GetSurfaceMaterialsPopulated world
-                if not frozen then this.SetFrozen true world // ensure we're frozen so we get the total bounds from the entity
-                let offset = -(this.GetBounds world).Min // use offset to bring div ops into positive space
-                this.SetFrozen false world
-                World.createEntity DefaultOverlay (Some splitParent.Surnames) splitParent.Group world |> ignore<Entity>
-                let splitSize = Constants.Engine.OctnodeSize
-                let splits = dictPlus HashIdentity.Structural []
-                for descendent in descendents do
-                    if  descendent.GetExists world &&
-                        descendent.GetSurfaceFreezable world &&
-                        getType (descendent.GetDispatcher world) <> typeof<Entity3dDispatcher> then
-                        let bounds = descendent.GetBounds world
-                        let divs = (bounds.Center + offset) / splitSize
-                        let evens = v3 (divs.X |> int |> single) (divs.Y |> int |> single) (divs.Z |> int |> single)
-                        let splitKey = evens * splitSize - offset
-                        let split =
-                            match splits.TryGetValue splitKey with
-                            | (true, split : Entity) -> split
-                            | (false, _) ->
-                                let dispatcher = this.GetDispatcher world
-                                let dispatacherName = getTypeName dispatcher
-                                let split = World.createEntity6 false dispatacherName DefaultOverlay (Some (Array.append splitParent.Surnames [|scstring splitKey|])) this.Group world
-                                split.SetMountOpt (Some (Relation.makeParent ())) world
-                                split.SetStaticModel (AssetTag.makeEmpty ()) world
-                                split.SetPositionLocal splitKey world
-                                split.SetPresence presence world
-                                split.SetPresenceConferred presenceConferred world
-                                split.SetSurfaceMaterialsPopulated surfaceMaterialsPopulated world
-                                split.SetPickable false world
-                                splits.Add (splitKey, split)
-                                split
-                        let descendent' =
-                            if descendent.Has<StaticModelSurfaceFacet> world && descendent.Name.StartsWith "Geometry"
-                            then split / descendent.Parent.Name // probably generic geometry imported from another engine's scene, so using a likely more descriptive parent name
-                            else split / descendent.Name
-                        let descendent' =
-                            if descendent'.GetExists world
-                            then split / (descendent'.Name + Gen.name)
-                            else descendent'
-                        World.renameEntityImmediate descendent descendent' world
-                for split in splits.Values do
-                    split.SetFrozen frozen world
-                World.destroyEntityImmediate this world
-                World.renameEntityImmediate splitParent this world
+/// Gives an entity the ability to freeze hierarchies of 3D entities.
+type Freezer3dFacet () =
+    inherit Facet (false, false, false)
 
-    /// Gives an entity the ability to freeze hierarchies of 3D entities.
-    type Freezer3dFacet () =
-        inherit Facet (false, false, false)
+    static let handleUpdateFrozenHierarchy evt world =
+        let entity = evt.Subscriber : Entity
+        entity.UpdateFrozenHierarchy world
+        Cascade
 
-        static let handleUpdateFrozenHierarchy evt world =
-            let entity = evt.Subscriber : Entity
-            entity.UpdateFrozenHierarchy world
-            Cascade
+    static member Properties =
+        [define Entity.StaticModel Assets.Default.StaticModel
+         nonPersistent Entity.FrozenBundles [||]
+         nonPersistent Entity.FrozenShapes [||]
+         define Entity.Frozen false
+         define Entity.PresenceConferred Exterior
+         define Entity.SurfaceMaterialsPopulated false
+         define Entity.IgnoreGlobalFreezerCommands false]
 
-        static member Properties =
-            [define Entity.StaticModel Assets.Default.StaticModel
-             nonPersistent Entity.FrozenSurfaces [||]
-             nonPersistent Entity.FrozenShapes [||]
-             define Entity.Frozen false
-             define Entity.PresenceConferred Exterior
-             define Entity.SurfaceMaterialsPopulated false]
+    override this.Register (entity, world) =
+        entity.SetOffset v3Zero world
+        World.defer (entity.UpdateFrozenHierarchy) entity world // children not loaded yet, so freeze at end of frame
+        World.sense handleUpdateFrozenHierarchy (entity.ChangeEvent (nameof entity.Frozen)) entity (nameof Freezer3dFacet) world
 
-        override this.Register (entity, world) =
-            entity.SetOffset v3Zero world
-            World.defer (entity.UpdateFrozenHierarchy) entity world // children not loaded yet, so freeze at end of frame
-            World.sense handleUpdateFrozenHierarchy (entity.ChangeEvent (nameof entity.Frozen)) entity (nameof Freezer3dFacet) world
+    override this.Render (renderPass, entity, world) =
 
-        override this.Render (renderPass, entity, world) =
+        // compute intersection function based on render pass
+        let intersects =
+            let interiorOpt = ValueSome (World.getGameEye3dFrustumInterior Game world)
+            let exterior = World.getGameEye3dFrustumExterior Game world
+            let imposter = World.getGameEye3dFrustumImposter Game world
+            let lightBoxOpt = ValueSome (World.getLight3dViewBox world)
+            fun probe light presence (bounds : Box3) ->
+                match renderPass with
+                | LightMapPass (_, lightMapBounds) -> not probe && not light && lightMapBounds.Intersects bounds
+                | ShadowPass (_, _, _, _, frustum) -> not probe && not light && frustum.Intersects bounds
+                | ReflectionPass (_, _) -> false
+                | NormalPass -> Presence.intersects3d interiorOpt exterior imposter lightBoxOpt probe light presence bounds
 
-            // compute intersection function based on render pass
-            let intersects =
-                let interiorOpt = ValueSome (World.getGameEye3dFrustumInterior Game world)
-                let exterior = World.getGameEye3dFrustumExterior Game world
-                let imposter = World.getGameEye3dFrustumImposter Game world
-                let lightBoxOpt = ValueSome (World.getLight3dViewBox world)
-                fun probe light presence bounds ->
-                    match renderPass with
-                    | NormalPass -> Presence.intersects3d interiorOpt exterior imposter lightBoxOpt probe light presence bounds
-                    | LightMapPass (_, lightMapBounds) -> not probe && not light && lightMapBounds.Intersects bounds
-                    | ShadowPass (_, _, _, _, frustum) -> not probe && not light && frustum.Intersects bounds
-                    | ReflectionPass (_, _) -> false
+        // render unculled surfaces
+        let bounds = entity.GetBounds world
+        let presenceConferred = entity.GetPresenceConferred world
+        if intersects false false presenceConferred bounds then
+            let bundles = entity.GetFrozenBundles world
+            let message = RenderStaticModelSurfaceBundles { StaticModelSurfaceBundles = bundles; RenderPass = renderPass }
+            World.enqueueRenderMessage3d message world
 
-            // render unculled surfaces
-            let bounds = entity.GetBounds world
-            let presenceConferred = entity.GetPresenceConferred world
-            if intersects false false presenceConferred bounds then
-                let surfaces = entity.GetFrozenSurfaces world
-                for i in 0 .. dec surfaces.Length do
-                    let boundsAndSurface = &surfaces.[i]
-                    let bounds = &boundsAndSurface.Fst
-                    let surface = &boundsAndSurface.Snd
-                    if (not renderPass.IsShadowPass || surface.CastShadow) && intersects false false surface.Presence bounds then
-                        World.renderStaticModelSurfaceFast (&surface.ModelMatrix, surface.CastShadow, surface.Presence, Option.toValueOption surface.InsetOpt, &surface.MaterialProperties, &surface.Material, surface.StaticModel, surface.SurfaceIndex, surface.DepthTest, surface.RenderType, renderPass, world)
+    override this.RegisterPhysics (entity, world) =
+        entity.RegisterFrozenShapesPhysics world
 
-        override this.RegisterPhysics (entity, world) =
-            entity.RegisterFrozenShapesPhysics world
+    override this.UnregisterPhysics (entity, world) =
+        entity.UnregisterFrozenShapesPhysics world
 
-        override this.UnregisterPhysics (entity, world) =
-            entity.UnregisterFrozenShapesPhysics world
+    override this.RayCast (ray, entity, world) =
+        if entity.GetPickable world then
+            let intersectionOpt = ray.Intersects (entity.GetBounds world)
+            [|Intersection.ofNullable intersectionOpt|]
+        else [|Miss|]
 
-        override this.RayCast (ray, entity, world) =
-            if entity.GetPickable world then
-                let intersectionOpt = ray.Intersects (entity.GetBounds world)
-                [|Intersection.ofNullable intersectionOpt|]
-            else [|Miss|]
-
-        override this.Edit (op, entity, world) =
-            match op with
-            | AppendProperties append ->
-                if ImGui.Button "Permafreeze" then
-                    append.EditContext.Snapshot Permafreeze world
-                    entity.Permafreeze world
-                if ImGui.Button "Permasplit" then
-                    append.EditContext.Snapshot Permasplit world
-                    entity.Permasplit world
-            | _ -> ()
+    override this.Edit (op, entity, world) =
+        match op with
+        | AppendProperties append ->
+            if ImGui.Button "Permafreeze" then
+                append.EditContext.Snapshot Permafreeze world
+                entity.Permafreeze world
+        | _ -> ()
 
 [<AutoOpen>]
-module StaticModelHierarchyDispatcherModule =
+module StaticModelHierarchyDispatcherExtensions =
 
     type Entity with
         member this.GetLoaded world : bool = this.Get (nameof this.Loaded) world
         member this.SetLoaded (value : bool) world = this.Set (nameof this.Loaded) value world
         member this.Loaded = lens (nameof this.Loaded) this this.GetLoaded this.SetLoaded
 
-    /// Gives an entity the base behavior of hierarchy of indexed static models.
-    type StaticModelHierarchyDispatcher () =
-        inherit Entity3dDispatcher (false, false, false)
+/// Gives an entity the base behavior of hierarchy of indexed static models.
+type StaticModelHierarchyDispatcher () =
+    inherit Entity3dDispatcher (false, false, false)
 
-        static let updateLoadedHierarchy (entity : Entity) world =
-            for child in entity.GetChildren world do
-                World.destroyEntityImmediate child world
-            World.tryImportEntityHierarchy
-                (entity.GetPresenceConferred world)
-                (entity.GetStaticModel world)
-                (entity.GetSurfaceMaterialsPopulated world)
-                Convex false (Right entity) world
-            entity.UpdateFrozenHierarchy world
+    static let updateLoadedHierarchy (entity : Entity) world =
+        for child in entity.GetChildren world do
+            World.destroyEntityImmediate child world
+        World.tryImportEntityHierarchy
+            (entity.GetPresenceConferred world)
+            (entity.GetStaticModel world)
+            (entity.GetSurfaceMaterialsPopulated world)
+            Convex false (Right entity) world
+        entity.UpdateFrozenHierarchy world
 
-        static let handleUpdateLoadedHierarchy evt world =
-            let entity = evt.Subscriber : Entity
+    static let handleUpdateLoadedHierarchy evt world =
+        let entity = evt.Subscriber : Entity
+        updateLoadedHierarchy entity world
+        Cascade
+
+    static member Facets =
+        [typeof<Freezer3dFacet>]
+
+    static member Properties =
+        [define Entity.StaticModel Assets.Default.StaticModel
+         define Entity.Loaded false]
+
+    override this.Register (entity, world) =
+        if not (entity.GetLoaded world) then
             updateLoadedHierarchy entity world
-            Cascade
+            entity.SetLoaded true world
+        World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.StaticModel)) entity world
+        World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.PresenceConferred)) entity world
+        World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.SurfaceMaterialsPopulated)) entity world
 
-        static member Facets =
-            [typeof<Freezer3dFacet>]
-
-        static member Properties =
-            [define Entity.StaticModel Assets.Default.StaticModel
-             define Entity.Loaded false]
-
-        override this.Register (entity, world) =
-            if not (entity.GetLoaded world) then
-                updateLoadedHierarchy entity world
-                entity.SetLoaded true world
-            World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.StaticModel)) entity world
-            World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.PresenceConferred)) entity world
-            World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.SurfaceMaterialsPopulated)) entity world
-
-        override this.Edit (op, _, _) =
-            match op with
-            | ReplaceProperty replace ->
-                if replace.PropertyDescriptor.PropertyName = nameof Entity.Loaded then
-                    replace.IndicateReplaced ()
-            | _ -> ()
+    override this.Edit (op, _, _) =
+        match op with
+        | ReplaceProperty replace ->
+            if replace.PropertyDescriptor.PropertyName = nameof Entity.Loaded then
+                replace.IndicateReplaced ()
+        | _ -> ()
 
 [<AutoOpen>]
-module RigidModelHierarchyDispatcherModule =
+module RigidModelHierarchyDispatcherExtensions =
 
     type Entity with
         member this.GetProfile world : Profile = this.Get (nameof this.Profile) world
         member this.SetProfile (value : Profile) world = this.Set (nameof this.Profile) value world
         member this.Profile = lens (nameof this.Profile) this this.GetProfile this.SetProfile
 
-    /// Gives an entity the base behavior of a hierarchy of indexed, physics-driven rigid models.
-    type RigidModelHierarchyDispatcher () =
-        inherit Entity3dDispatcher (true, false, false)
+/// Gives an entity the base behavior of a hierarchy of indexed, physics-driven rigid models.
+type RigidModelHierarchyDispatcher () =
+    inherit Entity3dDispatcher (true, false, false)
 
-        static let updateLoadedHierarchy (entity : Entity) world =
-            for child in entity.GetChildren world do
-                World.destroyEntityImmediate child world
-            World.tryImportEntityHierarchy
-                (entity.GetPresenceConferred world)
-                (entity.GetStaticModel world)
-                (entity.GetSurfaceMaterialsPopulated world)
-                (entity.GetProfile world)
-                true (Right entity) world
-            entity.UpdateFrozenHierarchy world
+    static let updateLoadedHierarchy (entity : Entity) world =
+        for child in entity.GetChildren world do
+            World.destroyEntityImmediate child world
+        World.tryImportEntityHierarchy
+            (entity.GetPresenceConferred world)
+            (entity.GetStaticModel world)
+            (entity.GetSurfaceMaterialsPopulated world)
+            (entity.GetProfile world)
+            true (Right entity) world
+        entity.UpdateFrozenHierarchy world
 
-        static let handleUpdateLoadedHierarchy evt world =
-            let entity = evt.Subscriber : Entity
+    static let handleUpdateLoadedHierarchy evt world =
+        let entity = evt.Subscriber : Entity
+        updateLoadedHierarchy entity world
+        Cascade
+
+    static member Facets =
+        [typeof<Freezer3dFacet>]
+
+    static member Properties =
+        [define Entity.StaticModel Assets.Default.StaticModel
+         define Entity.Profile Convex
+         define Entity.Loaded false]
+
+    override this.Register (entity, world) =
+        if not (entity.GetLoaded world) then
             updateLoadedHierarchy entity world
-            Cascade
+            entity.SetLoaded true world
+        World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.StaticModel)) entity world
+        World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.PresenceConferred)) entity world
+        World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.SurfaceMaterialsPopulated)) entity world
+        World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.Profile)) entity world
 
-        static member Facets =
-            [typeof<Freezer3dFacet>]
-
-        static member Properties =
-            [define Entity.StaticModel Assets.Default.StaticModel
-             define Entity.Profile Convex
-             define Entity.Loaded false]
-
-        override this.Register (entity, world) =
-            if not (entity.GetLoaded world) then
-                updateLoadedHierarchy entity world
-                entity.SetLoaded true world
-            World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.StaticModel)) entity world
-            World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.PresenceConferred)) entity world
-            World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.SurfaceMaterialsPopulated)) entity world
-            World.monitor handleUpdateLoadedHierarchy (entity.ChangeEvent (nameof entity.Profile)) entity world
-
-        override this.Edit (op, _, _) =
-            match op with
-            | ReplaceProperty replace ->
-                if replace.PropertyDescriptor.PropertyName = nameof Entity.Loaded then
-                    replace.IndicateReplaced ()
-            | _ -> ()
+    override this.Edit (op, _, _) =
+        match op with
+        | ReplaceProperty replace ->
+            if replace.PropertyDescriptor.PropertyName = nameof Entity.Loaded then
+                replace.IndicateReplaced ()
+        | _ -> ()

@@ -571,6 +571,12 @@ type PhysicsEngine =
     abstract GetBodyGrounded : bodyId : BodyId -> bool
     /// Check that the body with the given body id is a sensor.
     abstract GetBodySensor : bodyId : BodyId -> bool
+    /// Get the wheel speed framed in terms of the clutch (0.0f if not a wheeled vehicle).
+    abstract GetWheelSpeedAtClutch : bodyId : BodyId -> single
+    /// Get the given wheel's model matrix (identity if not a wheeled vehicle or invalid wheel).
+    abstract GetWheelModelMatrix : wheelModelRight : Vector3 * wheelModelUp : Vector3 * wheelIndex : int * bodyId : BodyId -> Matrix4x4
+    /// Get the given wheel's angular velocity (0.0f if not a wheeled vehicle or invalid wheel).
+    abstract GetWheelAngularVelocity : wheelIndex : int * bodyId : BodyId -> single
     /// Cast a ray into the physics bodies.
     abstract RayCast : ray : Ray3 * collisionMask : int * closestOnly : bool -> BodyIntersection array
     /// Handle a physics message from an external source.
@@ -598,6 +604,9 @@ type [<ReferenceEquality>] StubPhysicsEngine =
         member physicsEngine.GetBodyToGroundContactTangentOpt _ = failwith "No bodies in StubPhysicsEngine"
         member physicsEngine.GetBodyGrounded _ = failwith "No bodies in StubPhysicsEngine"
         member physicsEngine.GetBodySensor _ = failwith "No bodies in StubPhysicsEngine"
+        member physicsEngine.GetWheelSpeedAtClutch _ = failwith "No bodies in StubPhysicsEngine"
+        member physicsEngine.GetWheelModelMatrix (_, _, _, _) = failwith "No bodies in StubPhysicsEngine"
+        member physicsEngine.GetWheelAngularVelocity (_, _) = failwith "No bodies in StubPhysicsEngine"
         member physicsEngine.RayCast (_, _, _) = failwith "No bodies in StubPhysicsEngine"
         member physicsEngine.HandleMessage _ = ()
         member physicsEngine.TryIntegrate _ = None
@@ -605,6 +614,7 @@ type [<ReferenceEquality>] StubPhysicsEngine =
         member physicsEngine.ClearInternal () = ()
         member physicsEngine.CleanUp () = ()
 
+/// Miscellaneous physics operations.
 [<RequireQualifiedAccess>]
 module Physics =
 

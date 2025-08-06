@@ -9,13 +9,13 @@ open Nu
 open Nu.Tests
 module WorldTests =
 
-    let [<Test>] runEmptyFrameThenCleanUp () =
+    let [<Test>] ``Run empty frame then clean up.`` () =
         Nu.init ()
         let world = World.makeStub { WorldConfig.defaultConfig with Accompanied = true } (TestPlugin ())
-        let result = World.runWithCleanUp (fun world -> world.UpdateTime < 1L) ignore ignore ignore ignore ignore Live true world
+        let result = World.runWithCleanUp (fun world -> world.UpdateTime < 1L) ignore ignore ignore ignore ignore true world
         Assert.Equal (result, Constants.Engine.ExitCodeSuccess)
 
-    let [<Test; Category "Integration">] runIntegrationFrameThenCleanUp () =
+    let [<Test; Category "Integration">] ``Run integration frame then clean up.`` () =
         Nu.init ()
         let worldConfig = { WorldConfig.defaultConfig with Accompanied = true }
         let windowSize = Constants.Render.DisplayVirtualResolution * Globals.Render.DisplayScalar
@@ -26,10 +26,10 @@ module WorldTests =
             let rasterViewport = Viewport.makeRaster outerViewport.Bounds
             let geometryViewport = Viewport.makeGeometry outerViewport.Bounds.Size
             let world = World.make sdlDeps worldConfig geometryViewport rasterViewport outerViewport (TestPlugin ())
-            let result = World.runWithCleanUp (fun world -> world.UpdateTime < 1L) ignore ignore ignore ignore ignore Live true world
+            let result = World.runWithCleanUp (fun world -> world.UpdateTime < 1L) ignore ignore ignore ignore ignore true world
             Assert.Equal (result, Constants.Engine.ExitCodeSuccess)
         | Left _ -> Assert.Fail ()
 
-    let [<Test; Category "Integration">] runIntegrationFrameThenCleanUpThreeTimes () =
+    let [<Test; Category "Integration">] ``Run integration frame then clean up - three times.`` () =
         for _ in 0 .. dec 3 do
-            runIntegrationFrameThenCleanUp ()
+            ``Run integration frame then clean up.`` ()

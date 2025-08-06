@@ -71,6 +71,7 @@ type RelationConverter (pointType : Type) =
             else failconv "Invalid RelationConverter conversion from source." None
 
 /// A relation that can be resolved to an address via contextual resolution.
+/// OPTIMIZATION: Links is an array only for speed; it is invalid to mutate it.
 type [<CustomEquality; NoComparison; TypeConverter (typeof<RelationConverter>)>] 'a Relation =
     { Links : Link array }
 
@@ -152,10 +153,6 @@ type [<CustomEquality; NoComparison; TypeConverter (typeof<RelationConverter>)>]
             let links = Array.map Name names3
             { Links = Array.append parents links }
 
-    interface 'a Relation IEquatable with
-        member this.Equals that =
-            Relation<'a>.equals<'a> this that
-
     override this.Equals that =
         match that with
         | :? ('a Relation) as that -> Relation<'a>.equals this that
@@ -174,6 +171,11 @@ type [<CustomEquality; NoComparison; TypeConverter (typeof<RelationConverter>)>]
                 this.Links
         String.concat Constants.Address.SeparatorName names
 
+    interface 'a Relation IEquatable with
+        member this.Equals that =
+            Relation<'a>.equals<'a> this that
+
+/// Relation functions.
 [<RequireQualifiedAccess>]
 module Relation =
 

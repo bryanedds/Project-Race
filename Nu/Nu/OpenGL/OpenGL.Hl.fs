@@ -10,6 +10,7 @@ module OpenGL = let _ = ()
 namespace OpenGL
 open System
 open System.Runtime.InteropServices
+open System.Numerics
 open System.Text
 open SDL2
 open Prime
@@ -65,6 +66,14 @@ module Hl =
         Gl.Enable EnableCap.DebugOutputSynchronous
         Gl.DebugMessageControl (DebugSource.DontCare, DebugType.DontCare, DebugSeverity.DontCare, [||], true)
         Gl.DebugMessageCallback (DebugMessageProc, nativeint 0)
+
+    /// Check if an OpenGL internal format is supported.
+    let CheckFormat (format : InternalFormat) =
+        let result = [|0|]
+        Gl.GetInternalformat (TextureTarget.Renderbuffer, format, InternalFormatPName.InternalformatSupported, result)
+        if result.[0] = 0
+        then Log.fail ("OpenGL framebuffer internal format '" + string format + "' support is absent but required.")
+        else format
 
     /// Create an SDL OpenGL context with the given window.
     let CreateSglContextInitial window =

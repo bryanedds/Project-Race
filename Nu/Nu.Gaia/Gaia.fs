@@ -70,7 +70,7 @@ module Gaia =
     let mutable private OpenProjectImperativeExecution = false
     let mutable private CloseProjectImperativeExecution = false
     let mutable private NewProjectName = "My Game"
-    let mutable private NewProjectType = "MMCC Game"
+    let mutable private NewProjectType = "ImSim Game"
     let mutable private NewGroupDispatcherName = nameof GroupDispatcher
     let mutable private NewEntityDispatcherName = null // this will be initialized on start
     let mutable private NewEntityOverlayName = "(Default Overlay)"
@@ -486,8 +486,8 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
     let private printGaiaState gaiaState =
         PrettyPrinter.prettyPrintSymbol (valueToSymbol gaiaState) PrettyPrinter.defaultPrinter
 
-    let private containsProperty propertyDescriptor simulant world =
-        SimulantPropertyDescriptor.containsPropertyDescriptor propertyDescriptor simulant world
+    let private containsProperty propertyName simulant world =
+        SimulantPropertyDescriptor.containsPropertyDescriptor propertyName simulant world
 
     let private getPropertyValue propertyDescriptor simulant world =
         SimulantPropertyDescriptor.getValue propertyDescriptor simulant world
@@ -642,6 +642,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
         |> Seq.map (fun group -> World.getEntities group world)
         |> Seq.concat
         |> Seq.filter (fun entity -> entity.Has<Freezer3dFacet> world)
+        |> Seq.filter (fun entity -> not (entity.GetIgnoreGlobalFreezerCommands world))
         |> Seq.iter (fun freezer -> freezer.SetFrozen true world)
 
     let private thawEntities world =
@@ -650,6 +651,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
         |> Seq.map (fun group -> World.getEntities group world)
         |> Seq.concat
         |> Seq.filter (fun entity -> entity.Has<Freezer3dFacet> world)
+        |> Seq.filter (fun entity -> not (entity.GetIgnoreGlobalFreezerCommands world))
         |> Seq.iter (fun freezer -> freezer.SetFrozen false world)
 
     let private synchronizeNav world =
@@ -960,7 +962,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                     EntityFileDialogState.FileName <- ""
                     true
                 else
-                    MessageBoxOpt <- Some "Cannot load into a protected simulant (such as a group created by the MMCC or ImSim API)."
+                    MessageBoxOpt <- Some "Cannot load into a protected simulant (such as a group created by the ImSim or MMCC API)."
                     false
             with exn ->
                 MessageBoxOpt <- Some ("Could not load entity file due to: " + scstring exn)
@@ -985,7 +987,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                     SelectedEntityOpt <- None
                     true
             else
-                MessageBoxOpt <- Some "Cannot destroy a protected simulant (such as an entity created by the MMCC or ImSim API)."
+                MessageBoxOpt <- Some "Cannot destroy a protected simulant (such as an entity created by the ImSim or MMCC API)."
                 false
         | Some _ | None -> false
 
@@ -1045,7 +1047,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                     World.cutEntityToClipboard entity world
                     true
             else
-                MessageBoxOpt <- Some "Cannot cut a protected simulant (such as an entity created by the MMCC or ImSim API)."
+                MessageBoxOpt <- Some "Cannot cut a protected simulant (such as an entity created by the ImSim of MMCC API)."
                 false
         | Some _ | None -> false
 
@@ -1056,7 +1058,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                 World.copyEntityToClipboard entity world
                 true
             else
-                MessageBoxOpt <- Some "Cannot copy a protected simulant (such as an entity created by the MMCC or ImSim API)."
+                MessageBoxOpt <- Some "Cannot copy a protected simulant (such as an entity created by the ImSim or MMCC API)."
                 false
         | Some _ | None -> false
 
@@ -1128,7 +1130,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                     GroupFileDialogState.FileName <- ""
                     true
                 else
-                    MessageBoxOpt <- Some "Cannot load into a protected simulant (such as a group created by the MMCC or ImSim API)."
+                    MessageBoxOpt <- Some "Cannot load into a protected simulant (such as a group created by the ImSim of MMCC API)."
                     false
             with exn ->
                 MessageBoxOpt <- Some ("Could not load group file due to: " + scstring exn)
@@ -1794,7 +1796,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                                     selectEntityOpt (Some sourceEntity') world
                                     ShowSelectedEntity <- true
                             else Log.warn "Cannot mount an entity circularly."
-                    else MessageBoxOpt <- Some "Cannot relocate a protected simulant (such as an entity created by the MMCC or ImSim API)."
+                    else MessageBoxOpt <- Some "Cannot relocate a protected simulant (such as an entity created by the ImSim or MMCC API)."
                 | None -> ()
             ImGui.EndDragDropTarget ()
         if ImGui.BeginDragDropSource () then
@@ -1893,7 +1895,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                     if not (entity.GetProtected world) then
                         snapshot ChangeEntityDispatcher world
                         World.changeEntityDispatcher dispatcherName entity world
-                    else MessageBoxOpt <- Some "Cannot change dispatcher of a protected simulant (such as an entity created by the MMCC or ImSim API)."
+                    else MessageBoxOpt <- Some "Cannot change dispatcher of a protected simulant (such as an entity created by the ImSim or MMCC API)."
                 if Some dispatcherName = dispatcherNamePicked then ImGui.SetScrollHereY Constants.Gaia.HeightRegularPickOffset
                 if dispatcherName = dispatcherNameCurrent then ImGui.SetItemDefaultFocus ()
             ImGui.EndCombo ()
@@ -1978,7 +1980,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                         | nameof Entity.Overflow -> "!12"
                         | name -> name)
                 for propertyDescriptor in propertyDescriptors do
-                    if containsProperty propertyDescriptor.PropertyName simulant world then
+                    if containsProperty propertyDescriptor.PropertyName simulant world then // NOTE: this check is necessary because interaction with a property rollout can cause properties to be removed.
                         if propertyDescriptor.PropertyName = Constants.Engine.NamePropertyName then // NOTE: name edit properties can't be replaced.
                             match simulant with
                             | :? Screen as screen ->
@@ -2341,7 +2343,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                 // game menu
                 if ImGui.BeginMenu "Game" then
                     if ImGui.MenuItem "New Project" then ShowNewProjectDialog <- true
-                    if ImGui.MenuItem ("Open Project", "Ctrl+Shit+O") then ShowOpenProjectDialog <- true
+                    if ImGui.MenuItem ("Open Project", "Ctrl+Shift+O") then ShowOpenProjectDialog <- true
                     if ImGui.MenuItem "Close Project" then ShowCloseProjectDialog <- true
                     ImGui.Separator ()
                     if ImGui.MenuItem ("Undo", "Ctrl+Z") then tryUndo world |> ignore<bool>
@@ -2442,7 +2444,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                     if dispatcherName = NewEntityDispatcherName then ImGui.SetItemDefaultFocus ()
                 ImGui.EndCombo ()
             ImGui.SameLine ()
-            ImGui.Text "w/ Overlay"
+            ImGui.Text "w/"
             ImGui.SameLine ()
             ImGui.SetNextItemWidth 150.0f
             let overlayNames = Seq.append ["(Default Overlay)"; "(Routed Overlay)"; "(No Overlay)"] (World.getOverlayNames world)
@@ -2653,7 +2655,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                                         selectEntityOpt (Some sourceEntity') world
                                         ShowSelectedEntity <- true
                                     else MessageBoxOpt <- Some "Cannot unparent an entity when there exists another unparented entity with the same name."
-                            else MessageBoxOpt <- Some "Cannot relocate a protected simulant (such as an entity created by the MMCC or ImSim API)."
+                            else MessageBoxOpt <- Some "Cannot relocate a protected simulant (such as an entity created by the ImSim of MMCC API)."
                         | None -> ()
                     ImGui.EndDragDropTarget ()
 
@@ -2876,6 +2878,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
             match PropertyFocusedOpt with
             | Some (propertyDescriptor, simulant) when
                 World.getExists simulant world &&
+                containsProperty propertyDescriptor.PropertyName simulant world &&
                 propertyDescriptor.PropertyType <> typeof<ComputedProperty> ->
                 ToSymbolMemo.Evict Constants.Gaia.PropertyValueStrMemoEvictionAge
                 OfSymbolMemo.Evict Constants.Gaia.PropertyValueStrMemoEvictionAge
@@ -3074,10 +3077,14 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                     | (Choice1Of2 _, _) -> ()
                     | (Choice2Of2 exn, _) -> Log.error ("Could not initialize fsi eval due to: " + scstring exn)
 
-                    // attempt to open namespace derived from project name
+                    // attempt to open template namespace "MyGame", as well as namespace derived from project name
                     if projectDllPathValid then
+                        let errorStr = string FsiErrorStream // preserve any existing error
                         let namespaceName = PathF.GetFileNameWithoutExtension (ProjectDllPath.Replace (" ", ""))
+                        FsiSession.EvalInteractionNonThrowing ("open " + "MyGame") |> ignore<Choice<_, _> * _>
                         FsiSession.EvalInteractionNonThrowing ("open " + namespaceName) |> ignore<Choice<_, _> * _>
+                        FsiErrorStream.GetStringBuilder().Clear() |> ignore<StringBuilder> // ignore any open directive errors
+                        FsiErrorStream.Write errorStr // restore previous error string
 
                     // eval initialization finished
                     InteractiveNeedsInitialization <- false
@@ -3086,16 +3093,16 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                 if InteractiveInputStr.Contains (nameof TargetDir) then FsiSession.AddBoundValue (nameof TargetDir, TargetDir)
                 if InteractiveInputStr.Contains (nameof ProjectDllPath) then FsiSession.AddBoundValue (nameof ProjectDllPath, ProjectDllPath)
                 if InteractiveInputStr.Contains (nameof SelectedScreen) then FsiSession.AddBoundValue (nameof SelectedScreen, SelectedScreen)
-                if InteractiveInputStr.Contains (nameof SelectedScreen) then FsiSession.AddBoundValue (nameof SelectedScreen, SelectedScreen)
                 if InteractiveInputStr.Contains (nameof SelectedGroup) then FsiSession.AddBoundValue (nameof SelectedGroup, SelectedGroup)
                 if InteractiveInputStr.Contains (nameof SelectedEntityOpt) then
                     if SelectedEntityOpt.IsNone // HACK: 1/2: workaround for binding a null value with AddBoundValue.
                     then FsiSession.EvalInteractionNonThrowing "let selectedEntityOpt = Option<Entity>.None;;" |> ignore<Choice<_, _> * _>
                     else FsiSession.AddBoundValue (nameof SelectedEntityOpt, SelectedEntityOpt)
                 if InteractiveInputStr.Contains (nameof world) then FsiSession.AddBoundValue (nameof world, world)
-                File.SetAttributes (Constants.Gaia.InteractiveInputFilePath, FileAttributes.None)
-                File.WriteAllText (Constants.Gaia.InteractiveInputFilePath, InteractiveInputStr)
-                File.SetAttributes (Constants.Gaia.InteractiveInputFilePath, FileAttributes.ReadOnly)
+                if File.Exists Constants.Gaia.InteractiveInputFilePath then
+                    File.SetAttributes (Constants.Gaia.InteractiveInputFilePath, FileAttributes.None)
+                    File.WriteAllText (Constants.Gaia.InteractiveInputFilePath, InteractiveInputStr)
+                    File.SetAttributes (Constants.Gaia.InteractiveInputFilePath, FileAttributes.ReadOnly)
                 match FsiSession.EvalInteractionNonThrowing (InteractiveInputStr + ";;", Constants.Gaia.InteractiveInputFilePath) with
                 | (Choice1Of2 _, _) ->
                     let errorStr = string FsiErrorStream
@@ -3131,7 +3138,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                 ImGui.Text "Clear evaluation output (Alt+C)"
                 ImGui.EndTooltip ()
             if InteractiveInputFocusRequested then ImGui.SetKeyboardFocusHere (); InteractiveInputFocusRequested <- false
-            ImGui.InputTextMultiline ("##interactiveInputStr", &InteractiveInputStr, 131072u, v2 -1.0f 100.0f, if eval then ImGuiInputTextFlags.ReadOnly else ImGuiInputTextFlags.None) |> ignore<bool>
+            ImGui.InputTextMultiline ("##interactiveInputStr", &InteractiveInputStr, 131072u, v2 -1.0f 130.0f, if eval then ImGuiInputTextFlags.ReadOnly else ImGuiInputTextFlags.None) |> ignore<bool>
             if enter then InteractiveInputStr <- ""
             if eval || enter then InteractiveInputFocusRequested <- true
             ImGui.Separator ()
@@ -3351,16 +3358,16 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
             ImGui.Text "Project Type"
             ImGui.SameLine ()
             if ImGui.BeginCombo ("##newProjectType", NewProjectType) then
-                for projectType in ["MMCC Empty"; "MMCC Game"; "ImSim Empty"; "ImSim Game"] do
+                for projectType in ["ImSim Game"; "ImSim Empty"; "MMCC Game"; "MMCC Empty"] do
                     if ImGui.Selectable projectType then
                         NewProjectType <- projectType
                 ImGui.EndCombo ()
             let projectTypeDescription =
                 match NewProjectType with
-                | "MMCC Empty" -> "Create an empty MMCC project. This contains the minimum code needed to experiment with the MMCC API."
-                | "MMCC Game" -> "Create a full MMCC game project. This contains the structures and pieces that embody the best practices of MMCC usage."
-                | "ImSim Empty" -> "Create an empty ImSim project. This contains the minimum code needed to experiment with ImSim in a sandbox environment."
                 | "ImSim Game" -> "Create a full ImSim game project. This contains the structures and pieces that embody the best practices of ImSim usage."
+                | "ImSim Empty" -> "Create an empty ImSim project. This contains the minimum code needed to initially learn or experiment with the ImSim API."
+                | "MMCC Game" -> "Create a full MMCC game project. This contains the structures and pieces that embody the best practices of MMCC usage."
+                | "MMCC Empty" -> "Create an empty MMCC project. This contains the minimum code needed to initially learn or experiment with the MMCC API."
                 | _ -> failwithumf ()
             ImGui.Separator ()
             ImGui.TextWrapped ("Description: " + projectTypeDescription)
@@ -3401,9 +3408,6 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                         Directory.CreateDirectory NewProjectName |> ignore<DirectoryInfo>
                         Directory.SetCurrentDirectory newProjectDir
                         Process.Start("dotnet", "new " + shortName + " --force").WaitForExit()
-
-                        // TODO: consider also changing the profile name in the launchSettings.json file to match the
-                        // user-defined project name.
 
                         // rename project file
                         File.Copy (templateFileName, newFileName, true)
@@ -4035,6 +4039,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                     (RenderStaticModels
                         { StaticModels = lightProbeModels
                           StaticModel = Assets.Default.LightProbeModel
+                          Clipped = false
                           DepthTest = LessThanOrEqualTest
                           RenderType = DeferredRenderType
                           RenderPass = NormalPass })
@@ -4052,6 +4057,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                     (RenderStaticModels
                         { StaticModels = lightModels
                           StaticModel = Assets.Default.LightbulbModel
+                          Clipped = false
                           DepthTest = LessThanOrEqualTest
                           RenderType = DeferredRenderType
                           RenderPass = NormalPass })
@@ -4107,8 +4113,9 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                                   CastShadow = false
                                   Presence = Omnipresent
                                   InsetOpt = None
-                                  MaterialProperties = MaterialProperties.defaultProperties
+                                  MaterialProperties = { MaterialProperties.defaultProperties with SpecularScalarOpt = ValueSome 0.0f }
                                   StaticModel = Assets.Default.HighlightModel
+                                  Clipped = false // not needed when forward-rendered
                                   DepthTest = LessThanOrEqualTest
                                   RenderType = ForwardRenderType (0.0f, sort)
                                   RenderPass = NormalPass })
@@ -4129,7 +4136,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
             World.setEye3dRotation DesiredEye3dRotation world
 
     let rec private runWithCleanUpAndErrorProtection firstFrame world =
-        try World.runWithoutCleanUp tautology ignore ignore imGuiRender imGuiProcess imGuiPostProcess Live firstFrame world
+        try World.runWithoutCleanUp tautology ignore ignore imGuiRender imGuiProcess imGuiPostProcess firstFrame world
             World.cleanUp world
             Constants.Engine.ExitCodeSuccess
         with exn ->

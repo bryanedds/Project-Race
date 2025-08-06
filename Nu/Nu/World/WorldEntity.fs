@@ -7,6 +7,7 @@ open System.Collections.Generic
 open System.Numerics
 open Prime
 
+/// Entity functions for the world (2/2).
 [<AutoOpen>]
 module WorldEntityModule =
 
@@ -563,25 +564,45 @@ module WorldEntityModule =
             match entityStateOpt :> obj with
             | null -> ()
             | _ ->
+
+                // transfer entity state to destination
                 let entityState = { entityStateOpt with Id = Gen.id64; Surnames = destination.Surnames; Content = EntityContent.empty }
                 let children = World.getEntityChildren source world
                 let order = World.getEntityOrder source world
                 World.destroyEntityImmediateInternal false source world
                 World.addEntity entityState destination world
+
+                // update order
                 World.setEntityOrder order destination world |> ignore<bool>
+
+                // rename children
                 for child in children do
                     let destination = destination / child.Name
                     World.renameEntityImmediate child destination world
+
+                // update publish update flag
+                World.updateEntityPublishUpdateFlag destination world |> ignore<bool>
+
+                // update presence property from override
+                World.updateEntityPresenceOverride destination world
+
+                // process if needed
                 if WorldModule.UpdatingSimulants && World.getEntitySelected destination world then
                     WorldModule.tryProcessEntity true destination world
+
+                // update propagation sources
                 for target in World.getPropagationTargets source world do
                     if World.getEntityExists target world then
                         World.setEntityPropagationSourceOpt (Some destination) target world |> ignore<bool>
+
+                // insert a propagated descriptor if needed
                 match World.getEntityPropagatedDescriptorOpt destination world with
                 | None when World.hasPropagationTargets destination world ->
                     let propagatedDescriptor = World.writeEntity false false EntityDescriptor.empty destination world
                     World.setEntityPropagatedDescriptorOpt (Some propagatedDescriptor) destination world |> ignore<bool>
                 | Some _ | None -> ()
+
+                // mount
                 let mountOpt = World.getEntityMountOpt destination world
                 if  source.Parent <> destination.Parent &&
                     Option.isSome mountOpt &&
@@ -631,8 +652,26 @@ module WorldEntityModule =
             let dispatcher = entity.GetDispatcher world
             dispatcher.TryUntruncateModel<'model> (model, entity, world)
 
+        /// Get all the entities in a group with the given dispatcher type.
+        static member getEntitiesAs<'d when 'd :> EntityDispatcher> (group : Group) (world : World) : Entity USet =
+            match world.EntitiesIndexed.TryGetValue struct (group, typeof<'d>) with
+            | (true, entities) -> entities
+            | (false, _) -> USet.makeEmpty HashIdentity.Structural (World.getCollectionConfig world)
+
+        /// Get all the entities in a group that have a given facet type.
+        static member getEntitiesWith<'f when 'f :> Facet> (group : Group) (world : World) : Entity USet =
+            match world.EntitiesIndexed.TryGetValue struct (group, typeof<'f>) with
+            | (true, entities) -> entities
+            | (false, _) -> USet.makeEmpty HashIdentity.Structural (World.getCollectionConfig world)
+
         /// Get all the entities in a group.
-        static member getEntities (group : Group) (world : World) =
+        static member getEntities (group : Group) (world : World) : Entity USet =
+            match world.EntitiesIndexed.TryGetValue struct (group, typeof<EntityDispatcher>) with
+            | (true, entities) -> entities
+            | (false, _) -> USet.makeEmpty HashIdentity.Structural (World.getCollectionConfig world)
+
+        /// Get all the entities in a group in depth-first order.
+        static member getEntitiesDepthFirst (group : Group) (world : World) =
             match world.Simulants.TryGetValue group with
             | (true, childrenOpt) ->
                 match childrenOpt with
@@ -777,9 +816,8 @@ module WorldEntityModule =
         /// Generate a sequential, editor-friendly entity name.
         static member generateEntitySequentialName dispatcherName group (world : World) =
             let entityNames =
-                world.EntityStates // OPTIMIZATION: this approach is faster than World.getEntities in big scenes.
-                |> Seq.filter (fun entry -> (fst entry).Group = group)
-                |> Seq.map (fun entry -> (fst entry).Name)
+                World.getEntities group world
+                |> Seq.map _.Name
                 |> hashSetPlus StringComparer.Ordinal
             World.generateEntitySequentialName2 dispatcherName entityNames
 

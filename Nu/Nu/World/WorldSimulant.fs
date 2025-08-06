@@ -7,16 +7,11 @@ open System.Reflection
 open System.Runtime.CompilerServices
 open Prime
 
+/// Generalized simulant functions for the world.
 [<AutoOpen>]
 module WorldSimulantModule =
 
     type World with
-
-        static member internal addSimulantScriptUnsubscription =
-            WorldModule.addSimulantScriptUnsubscription
-
-        static member internal unsubscribeSimulantScripts =
-            WorldModule.unsubscribeSimulantScripts
 
         static member internal tryGetState (simulant : Simulant) world =
             match simulant with
@@ -288,6 +283,7 @@ module WorldSimulantModule =
             let state = World.getState simulant world
             Reflection.getReflectivePropertyDefinitions state
 
+/// PropertyDescriptor functions.
 [<RequireQualifiedAccess>]
 module PropertyDescriptor =
 

@@ -13,6 +13,7 @@ open ImGuiNET
 open JoltPhysicsSharp
 open Prime
 
+/// ImGui functions for the world.
 [<AutoOpen>]
 module WorldImGui =
 
@@ -521,6 +522,7 @@ module WorldImGui =
                 let mutable ssvfAsymmetry = lighting3dConfig.SsvfAsymmetry
                 let mutable ssvfIntensity = lighting3dConfig.SsvfIntensity
                 let mutable ssrEnabled = lighting3dConfig.SsrEnabled
+                let mutable ssrIntensity = lighting3dConfig.SsrIntensity
                 let mutable ssrDetail = lighting3dConfig.SsrDetail
                 let mutable ssrRefinementsMax = lighting3dConfig.SsrRefinementsMax
                 let mutable ssrRayThickness = lighting3dConfig.SsrRayThickness
@@ -535,8 +537,6 @@ module WorldImGui =
                 let mutable ssrSlopeCutoffMargin = lighting3dConfig.SsrSlopeCutoffMargin
                 let mutable ssrEdgeHorizontalMargin = lighting3dConfig.SsrEdgeHorizontalMargin
                 let mutable ssrEdgeVerticalMargin = lighting3dConfig.SsrEdgeVerticalMargin
-                let mutable ssrLightColor = let color = lighting3dConfig.SsrLightColor in color.V4
-                let mutable ssrLightBrightness = lighting3dConfig.SsrLightBrightness
                 lighting3dEdited <- ImGui.SliderFloat ("Light Cutoff Margin", &lightCutoffMargin, 0.0f, 1.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.SliderFloat ("Light Ambient Boost Cutoff", &lightAmbientBoostCutoff, 0.0f, 1.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.SliderFloat ("Light Ambient Boost Scalar", &lightAmbientBoostScalar, 0.0f, 5.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
@@ -549,7 +549,7 @@ module WorldImGui =
                 lighting3dEdited <- ImGui.InputFloat ("Fog Start", &fogStart, 1.0f, 10.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.InputFloat ("Fog Finish", &fogFinish, 1.0f, 10.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.ColorEdit4 ("Fog Color", &fogColor) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
-                lighting3dEdited <- ImGui.Checkbox ("Sss Enabled", &sssEnabled) || lighting3dEdited
+                lighting3dEdited <- ImGui.Checkbox ("Sss Enabled", &sssEnabled) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.Checkbox ("Ssao Enabled", &ssaoEnabled) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.SliderFloat ("Ssao Intensity", &ssaoIntensity, 0.0f, 10.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.SliderFloat ("Ssao Bias", &ssaoBias, 0.0f, 0.1f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
@@ -560,6 +560,7 @@ module WorldImGui =
                 lighting3dEdited <- ImGui.SliderFloat ("Ssvf Asymmetry", &ssvfAsymmetry, -1.0f, 1.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.SliderFloat ("Ssvf Intensity", &ssvfIntensity, 0.0f, 10.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.Checkbox ("Ssr Enabled", &ssrEnabled) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
+                lighting3dEdited <- ImGui.SliderFloat ("Ssr Intensity", &ssrIntensity, 0.0f, 10.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.SliderFloat ("Ssr Detail", &ssrDetail, 0.0f, 1.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.SliderInt ("Ssr Refinements Max", &ssrRefinementsMax, 0, 32) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.SliderFloat ("Ssr Ray Thickness", &ssrRayThickness, 0.0f, 1.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
@@ -574,8 +575,6 @@ module WorldImGui =
                 lighting3dEdited <- ImGui.SliderFloat ("Ssr Slope Cutoff Margin", &ssrSlopeCutoffMargin, 0.0f, 1.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.SliderFloat ("Ssr Edge Horizontal Margin", &ssrEdgeHorizontalMargin, 0.0f, 1.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
                 lighting3dEdited <- ImGui.SliderFloat ("Ssr Edge Vertical Margin", &ssrEdgeVerticalMargin, 0.0f, 1.0f) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
-                lighting3dEdited <- ImGui.ColorEdit4 ("Ssr Light Color", &ssrLightColor) || lighting3dEdited; if ImGui.IsItemFocused () then context.FocusProperty ()
-                lighting3dEdited <- ImGui.SliderFloat ("Ssr Light Brightness", &ssrLightBrightness, 0.0f, 1.0f) || lighting3dEdited
                 if lighting3dEdited then
                     let lighting3dConfig =
                         { LightCutoffMargin = lightCutoffMargin
@@ -601,6 +600,7 @@ module WorldImGui =
                           SsvfAsymmetry = ssvfAsymmetry
                           SsvfIntensity = ssvfIntensity
                           SsrEnabled = ssrEnabled
+                          SsrIntensity = ssrIntensity
                           SsrDetail = ssrDetail
                           SsrRefinementsMax = ssrRefinementsMax
                           SsrRayThickness = ssrRayThickness
@@ -614,9 +614,7 @@ module WorldImGui =
                           SsrSlopeCutoff = ssrSlopeCutoff
                           SsrSlopeCutoffMargin = ssrSlopeCutoffMargin
                           SsrEdgeHorizontalMargin = ssrEdgeHorizontalMargin
-                          SsrEdgeVerticalMargin = ssrEdgeVerticalMargin
-                          SsrLightColor = Color ssrLightColor
-                          SsrLightBrightness = ssrLightBrightness }
+                          SsrEdgeVerticalMargin = ssrEdgeVerticalMargin }
                     (promoted, true, lighting3dConfig)
                 else (promoted, false, lighting3dConfig)
             | :? Nav3dConfig as nav3dConfig ->
@@ -973,7 +971,6 @@ module WorldImGui =
                 else (promoted, edited, value)
 
 /// Renders 3D physics via ImGui.
-/// NOTE: there's no need for this to be stubbable since it merely makes calls to ImGui which are themselves stubbable.
 type RendererPhysics3d () =
     inherit DebugRenderer ()
 
@@ -1007,6 +1004,7 @@ type RendererPhysics3d () =
             segmentList.Clear ()
         this.NextFrame ()
 
+/// More ImGui functions for the world.
 [<AutoOpen>]
 module WorldImGui2 =
     
@@ -1014,7 +1012,10 @@ module WorldImGui2 =
 
         // Render the 3D physics via ImGui using the given settings.
         static member imGuiRenderPhysics3d (settings : DrawSettings) world =
-            let physicsEngine3d = World.getPhysicsEngine3d world
-            let renderer = World.getRendererPhysics3d world :?> RendererPhysics3d
-            physicsEngine3d.TryRender (world.Eye3dCenter, world.Eye3dFrustumView, settings, renderer)
-            renderer.Flush world
+            match World.getRendererPhysics3dOpt world with
+            | Some renderer ->
+                let renderer = renderer :?> RendererPhysics3d
+                let physicsEngine3d = World.getPhysicsEngine3d world
+                physicsEngine3d.TryRender (world.Eye3dCenter, world.Eye3dFrustumView, settings, renderer)
+                renderer.Flush world
+            | None -> ()

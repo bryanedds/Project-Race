@@ -114,12 +114,16 @@ type 'w CoroutineBuilder (launcher : 'w Coroutine -> unit) =
     member this.Run (coroutine : 'w Coroutine) =
         launcher coroutine
 
+/// CoroutineBuilder operators.
 [<AutoOpen>]
 module CoroutineBuilder =
 
     /// The coroutine builder.
     [<DebuggerHidden; DebuggerStepThrough>]
     let inline coroutine launcher = CoroutineBuilder launcher
+
+/// Coroutine operators.
+module Coroutine =
 
     /// A coroutine that cancels the entire tree.
     [<DebuggerHidden; DebuggerStepThrough>]

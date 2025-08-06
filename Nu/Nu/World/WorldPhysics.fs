@@ -6,6 +6,7 @@ open System
 open System.Numerics
 open Prime
 
+/// Physics functions for the world.
 [<AutoOpen>]
 module WorldPhysics =
 
@@ -17,8 +18,8 @@ module WorldPhysics =
         static member internal getPhysicsEngine3d (world : World) =
             world.Subsystems.PhysicsEngine3d
 
-        static member internal getRendererPhysics3d (world : World) =
-            world.Subsystems.RendererPhysics3d
+        static member internal getRendererPhysics3dOpt (world : World) =
+            world.Subsystems.RendererPhysics3dOpt
 
         /// Localize a primitive body shape to a specific size; non-primitive body shapes are unaffected.
         static member localizePrimitiveBodyShape (size : Vector3) (bodyShape : BodyShape) =
@@ -175,6 +176,33 @@ module WorldPhysics =
             else
                 Log.info ("Body for '" + scstring bodyId + "' not found.")
                 false
+
+        static member getBodyWheelSpeedAtClutch bodyId (world : World) =
+            if world.Subsystems.PhysicsEngine3d.GetBodyExists bodyId then
+                world.Subsystems.PhysicsEngine3d.GetWheelSpeedAtClutch bodyId
+            elif world.Subsystems.PhysicsEngine2d.GetBodyExists bodyId then
+                world.Subsystems.PhysicsEngine2d.GetWheelSpeedAtClutch bodyId
+            else
+                Log.info ("Body for '" + scstring bodyId + "' not found.")
+                0.0f
+
+        static member getBodyWheelModelMatrix wheelModelRight wheelModelUp wheelIndex bodyId (world : World) =
+            if world.Subsystems.PhysicsEngine3d.GetBodyExists bodyId then
+                world.Subsystems.PhysicsEngine3d.GetWheelModelMatrix (wheelModelRight, wheelModelUp, wheelIndex, bodyId)
+            elif world.Subsystems.PhysicsEngine2d.GetBodyExists bodyId then
+                world.Subsystems.PhysicsEngine2d.GetWheelModelMatrix (wheelModelRight, wheelModelUp, wheelIndex, bodyId)
+            else
+                Log.info ("Body for '" + scstring bodyId + "' not found.")
+                m4Identity
+
+        static member getBodyWheelAngularVelocity wheelIndex bodyId (world : World) =
+            if world.Subsystems.PhysicsEngine3d.GetBodyExists bodyId then
+                world.Subsystems.PhysicsEngine3d.GetWheelAngularVelocity (wheelIndex, bodyId)
+            elif world.Subsystems.PhysicsEngine2d.GetBodyExists bodyId then
+                world.Subsystems.PhysicsEngine2d.GetWheelAngularVelocity (wheelIndex, bodyId)
+            else
+                Log.info ("Body for '" + scstring bodyId + "' not found.")
+                0.0f
 
         /// Ray cast against 3d physics bodies.
         static member rayCast3dBodies ray collisionMask closestOnly (world : World) =

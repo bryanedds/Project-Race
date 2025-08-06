@@ -15,7 +15,7 @@ open Nu.Particles
 [<AutoOpen>]
 module Declarative =
 
-    /// The global Game simulant.
+    /// The ubiquitous Game simulant.
     let Game = Game.Handle
 
     /// Declaratively exposes Screen lenses and events.
@@ -1413,58 +1413,28 @@ type RigidBodyFacet () =
         entity.PropagatePhysics world
         Cascade
 
-    static let createWheelSettingsWV front position =
-        let settings = new JoltPhysicsSharp.WheelSettingsWV ()
-        settings.Position <- position
-        settings.SuspensionForcePoint <- v3Zero
-        settings.SuspensionDirection <- v3Down
-        settings.SteeringAxis <- v3Up
-        settings.WheelUp <- v3Up
-        settings.WheelForward <- v3Forward
-        settings.SuspensionMinLength <- 0.3f
-        settings.SuspensionMaxLength <- 0.5f
-        settings.SuspensionPreloadLength <- 0.0f
-        settings.SuspensionSpring <- JoltPhysicsSharp.SpringSettings (JoltPhysicsSharp.SpringMode.FrequencyAndDamping, 3.0f, 0.5f)
-        settings.Radius <- 0.3f
-        settings.Width <- 0.1f
-        settings.EnableSuspensionForcePoint <- false
-        settings.Inertia <- 0.9f
-        //settings.AngularDamping <- 0.2f // TODO: P1: make sure thie gets exposed from JoltPhysicsSharp.
-        settings.MaxSteerAngle <- if front then Math.DegreesToRadians 70.0f else 0.0f
-        settings.MaxBrakeTorque <- 1500.0f
-        settings.MaxHandBrakeTorque <- if front then 0.0f else 4000.0f
-        settings
+    static let createVehiclePropertiesAether () =
+        VehiclePropertiesAether
 
     static let createVehiclePropertiesJolt () =
 
-        // vehicle engine config
-        let mutable vehicleEngineSettings = JoltPhysicsSharp.VehicleEngineSettings ()
-        vehicleEngineSettings.MaxTorque <- 500.0f
-        vehicleEngineSettings.MinRPM <- 1000.0f
-        vehicleEngineSettings.MaxRPM <- 6000.0f
-        vehicleEngineSettings.Inertia <- 0.5f
-        vehicleEngineSettings.AngularDamping <- 0.2f
-
-        // vehicle transmission config
-        let vehicleTransmissionSettings = new JoltPhysicsSharp.VehicleTransmissionSettings ()
-        vehicleTransmissionSettings.Mode <- JoltPhysicsSharp.TransmissionMode.Auto
-        vehicleTransmissionSettings.SwitchTime <- 0.5f
-        vehicleTransmissionSettings.ClutchReleaseTime <- 0.3f
-        vehicleTransmissionSettings.SwitchLatency <- 0.5f
-        vehicleTransmissionSettings.ShiftUpRPM <- 4000.0f
-        vehicleTransmissionSettings.ShiftDownRPM <- 2000.0f
-        vehicleTransmissionSettings.ClutchStrength <- 10.0f
+        let createWheelSettingsWV front position =
+            let settings = new JoltPhysicsSharp.WheelSettingsWV ()
+            settings.Position <- position
+            settings.WheelForward <- v3Forward
+            if front then
+                settings.MaxBrakeTorque <- 0.0f
+                settings.MaxHandBrakeTorque <- 4000.0f
+            else
+                settings.MaxBrakeTorque <- 4000.0f
+                settings.MaxHandBrakeTorque <- 4000.0f
+                settings.MaxSteerAngle <- 0.0f
+            settings
 
         // vehicle controller config
+        let mutable differential = JoltPhysicsSharp.VehicleDifferentialSettings (LeftWheel = 0, RightWheel = 1)
         let wheeledVehicleControllerSettings = new JoltPhysicsSharp.WheeledVehicleControllerSettings ()
-        wheeledVehicleControllerSettings.Engine <- vehicleEngineSettings
-        wheeledVehicleControllerSettings.Transmission <- vehicleTransmissionSettings
-        wheeledVehicleControllerSettings.DifferentialLimitedSlipRatio <- 1.4f
         wheeledVehicleControllerSettings.DifferentialsCount <- 1
-        let mutable differential = JoltPhysicsSharp.VehicleDifferentialSettings ()
-        differential.LeftWheel <- 0
-        differential.RightWheel <- 1
-        differential.LimitedSlipRatio <- wheeledVehicleControllerSettings.DifferentialLimitedSlipRatio
         wheeledVehicleControllerSettings.SetDifferential (0, differential)
 
         // vehicle wheels config
@@ -1472,18 +1442,16 @@ type RigidBodyFacet () =
             [|for i in 0 .. dec 4 do
                 let position =
                     match i with
-                    | 0 -> v3 -0.8f 0.6f -3.0f // front left
-                    | 1 -> v3 0.8f 0.6f -3.0f // front right
-                    | 2 -> v3 -0.8f 0.6f 1.5f // back left
-                    | 3 -> v3 0.8f 0.6f 1.5f // back right
+                    | 0 -> v3 -0.8f -0.3f -3.0f // front left
+                    | 1 -> v3 0.8f -0.3f -3.0f // front right
+                    | 2 -> v3 -0.8f -0.3f 1.5f // back left
+                    | 3 -> v3 0.8f -0.3f 1.5f // back right
                     | _ -> failwithumf ()
                 createWheelSettingsWV (i < 2) position :> JoltPhysicsSharp.WheelSettings|]
 
         // vehicle constraint config
         let vehicleConstraintSettings = new JoltPhysicsSharp.VehicleConstraintSettings ()
-        vehicleConstraintSettings.Up <- v3Up
         vehicleConstraintSettings.Forward <- v3Forward
-        vehicleConstraintSettings.MaxPitchRollAngle <- MathF.PI
         vehicleConstraintSettings.Wheels <- wheelSettings
         vehicleConstraintSettings.Controller <- wheeledVehicleControllerSettings
 
@@ -1548,7 +1516,10 @@ type RigidBodyFacet () =
         let mutable transform = entity.GetTransform world
         let vehicleProperties =
             match entity.GetBodyType world with
-            | Vehicle -> if is2d then VehiclePropertiesAether else createVehiclePropertiesJolt ()
+            | Vehicle ->
+                match entity.GetVehicleProperties world with
+                | VehiclePropertiesAbsent -> if is2d then createVehiclePropertiesAether () else createVehiclePropertiesJolt ()
+                | _ as properties -> properties
             | _ -> VehiclePropertiesAbsent
         let bodyProperties =
             { Enabled = entity.GetBodyEnabled world
@@ -1579,6 +1550,15 @@ type RigidBodyFacet () =
 
     override this.UnregisterPhysics (entity, world) =
         World.destroyBody (entity.GetIs2d world) (entity.GetBodyId world) world
+
+    override this.Edit (op, entity, world) =
+        match (op, entity.GetBodyType world) with
+        | (ViewportOverlay _, Vehicle) ->
+            let bodyId = entity.GetBodyId world
+            for i in 0 .. dec 4 do
+                let wheelModelMatrix = World.getBodyWheelModelMatrix v3Right v3Up i bodyId world
+                World.imGuiCircle3d wheelModelMatrix.Translation 5.0f false Color.Yellow world
+        | (_, _) -> ()
 
 [<AutoOpen>]
 module BodyJointFacetExtensions =
@@ -2577,6 +2557,12 @@ module StaticBillboardFacetExtensions =
         member this.GetShadowOffset world : single = this.Get (nameof this.ShadowOffset) world
         member this.SetShadowOffset (value : single) world = this.Set (nameof this.ShadowOffset) value world
         member this.ShadowOffset = lens (nameof this.ShadowOffset) this this.GetShadowOffset this.SetShadowOffset
+        member this.GetOrientUp world : bool = this.Get(nameof this.OrientUp) world
+        member this.SetOrientUp (value : bool) world = this.Set(nameof this.OrientUp) value world
+        member this.OrientUp = lens (nameof this.OrientUp) this this.GetOrientUp this.SetOrientUp
+        member this.GetPlanar world : bool = this.Get(nameof this.Planar) world
+        member this.SetPlanar (value : bool) world = this.Set(nameof this.Planar) value world
+        member this.Planar = lens (nameof this.Planar) this this.GetPlanar this.SetPlanar
 
 /// Augments an entity with a static billboard.
 type StaticBillboardFacet () =
@@ -2588,7 +2574,9 @@ type StaticBillboardFacet () =
          define Entity.Material Material.defaultMaterial
          define Entity.DepthTest LessThanOrEqualTest
          define Entity.RenderStyle Deferred
-         define Entity.ShadowOffset Constants.Engine.BillboardShadowOffsetDefault]
+         define Entity.ShadowOffset Constants.Engine.BillboardShadowOffsetDefault
+         define Entity.OrientUp true
+         define Entity.Planar true]
 
     override this.Render (renderPass, entity, world) =
         let mutable transform = entity.GetTransform world
@@ -2601,13 +2589,15 @@ type StaticBillboardFacet () =
             let material = entity.GetMaterial world
             let shadowOffset = entity.GetShadowOffset world
             let depthTest = entity.GetDepthTest world
+            let orientUp = entity.GetOrientUp world
+            let planar = entity.GetPlanar world
             let renderType =
                 match entity.GetRenderStyle world with
                 | Deferred -> DeferredRenderType
                 | Forward (subsort, sort) -> ForwardRenderType (subsort, sort)
             World.enqueueRenderMessage3d
                 (RenderBillboard
-                    { CastShadow = castShadow; Presence = presence; ModelMatrix = affineMatrix; InsetOpt = insetOpt
+                    { CastShadow = castShadow; Presence = presence; ModelMatrix = affineMatrix; InsetOpt = insetOpt; OrientUp = orientUp; Planar = planar;
                       MaterialProperties = properties; Material = material; ShadowOffset = shadowOffset; DepthTest = depthTest; RenderType = renderType; RenderPass = renderPass })
                 world
 
@@ -2648,7 +2638,9 @@ type AnimatedBillboardFacet () =
          define Entity.Material Material.defaultMaterial
          define Entity.DepthTest LessThanOrEqualTest
          define Entity.RenderStyle Deferred
-         define Entity.ShadowOffset Constants.Engine.BillboardShadowOffsetDefault]
+         define Entity.ShadowOffset Constants.Engine.BillboardShadowOffsetDefault
+         define Entity.OrientUp true
+         define Entity.Planar true]
 
     override this.Update (entity, world) =
         if not (entity.GetEnabled world) then
@@ -2665,13 +2657,15 @@ type AnimatedBillboardFacet () =
             let material = entity.GetMaterial world
             let shadowOffset = entity.GetShadowOffset world
             let depthTest = entity.GetDepthTest world
+            let orientUp = entity.GetOrientUp world
+            let planar = entity.GetPlanar world
             let renderType =
                 match entity.GetRenderStyle world with
                 | Deferred -> DeferredRenderType
                 | Forward (subsort, sort) -> ForwardRenderType (subsort, sort)
             World.enqueueRenderMessage3d
                 (RenderBillboard
-                    { CastShadow = castShadow; Presence = presence; ModelMatrix = affineMatrix; InsetOpt = insetOpt
+                    { CastShadow = castShadow; Presence = presence; ModelMatrix = affineMatrix; InsetOpt = insetOpt; OrientUp = orientUp; Planar = planar;
                       MaterialProperties = properties; Material = material; ShadowOffset = shadowOffset; DepthTest = depthTest; RenderType = renderType; RenderPass = renderPass })
                 world
 
@@ -2921,7 +2915,8 @@ type BasicStaticBillboardEmitterFacet () =
                               IgnoreLightMapsOpt = match emitterProperties.IgnoreLightMapsOpt with ValueSome ignoreLightMaps -> ValueSome ignoreLightMaps | ValueNone -> descriptor.MaterialProperties.IgnoreLightMapsOpt
                               OpaqueDistanceOpt = ValueNone
                               FinenessOffsetOpt = match emitterProperties.FinenessOffsetOpt with ValueSome finenessOffset -> ValueSome finenessOffset | ValueNone -> descriptor.MaterialProperties.FinenessOffsetOpt
-                              ScatterTypeOpt = match emitterProperties.ScatterTypeOpt with ValueSome scatterType -> ValueSome scatterType | ValueNone -> descriptor.MaterialProperties.ScatterTypeOpt }
+                              ScatterTypeOpt = match emitterProperties.ScatterTypeOpt with ValueSome scatterType -> ValueSome scatterType | ValueNone -> descriptor.MaterialProperties.ScatterTypeOpt
+                              SpecularScalarOpt = match emitterProperties.SpecularScalarOpt with ValueSome specularScalar -> ValueSome specularScalar | ValueNone -> descriptor.MaterialProperties.SpecularScalarOpt }
                         let emitterMaterial = entity.GetEmitterMaterial world
                         let material =
                             { AlbedoImageOpt = match emitterMaterial.AlbedoImageOpt with ValueSome albedoImage -> ValueSome albedoImage | ValueNone -> descriptor.Material.AlbedoImageOpt
@@ -2934,7 +2929,8 @@ type BasicStaticBillboardEmitterFacet () =
                               SubdermalImageOpt = match emitterMaterial.SubdermalImageOpt with ValueSome subdermalImage -> ValueSome subdermalImage | ValueNone -> descriptor.Material.SubdermalImageOpt
                               FinenessImageOpt = match emitterMaterial.FinenessImageOpt with ValueSome finenessImage -> ValueSome finenessImage | ValueNone -> descriptor.Material.FinenessImageOpt
                               ScatterImageOpt = match emitterMaterial.ScatterImageOpt with ValueSome scatterImage -> ValueSome scatterImage | ValueNone -> descriptor.Material.ScatterImageOpt
-                              TwoSidedOpt = match emitterMaterial.TwoSidedOpt with ValueSome twoSided -> ValueSome twoSided | ValueNone -> descriptor.Material.TwoSidedOpt }
+                              TwoSidedOpt = match emitterMaterial.TwoSidedOpt with ValueSome twoSided -> ValueSome twoSided | ValueNone -> descriptor.Material.TwoSidedOpt
+                              ClippedOpt = match emitterMaterial.ClippedOpt with ValueSome clipped -> ValueSome clipped | ValueNone -> descriptor.Material.ClippedOpt }
                         Some
                             (RenderBillboardParticles
                                 { CastShadow = castShadow
@@ -2957,6 +2953,9 @@ type BasicStaticBillboardEmitterFacet () =
 [<AutoOpen>]
 module StaticModelFacetExtensions =
     type Entity with
+        member this.GetClipped world : bool = this.Get (nameof this.Clipped) world
+        member this.SetClipped (value : bool) world = this.Set (nameof this.Clipped) value world
+        member this.Clipped = lens (nameof this.Clipped) this this.GetClipped this.SetClipped
         member this.GetStaticModel world : StaticModel AssetTag = this.Get (nameof this.StaticModel) world
         member this.SetStaticModel (value : StaticModel AssetTag) world = this.Set (nameof this.StaticModel) value world
         member this.StaticModel = lens (nameof this.StaticModel) this this.GetStaticModel this.SetStaticModel
@@ -2968,6 +2967,7 @@ type StaticModelFacet () =
     static member Properties =
         [define Entity.InsetOpt None
          define Entity.MaterialProperties MaterialProperties.empty
+         define Entity.Clipped false
          define Entity.DepthTest LessThanOrEqualTest
          define Entity.RenderStyle Deferred
          define Entity.StaticModel Assets.Default.StaticModel]
@@ -2981,12 +2981,13 @@ type StaticModelFacet () =
             let insetOpt = ValueOption.ofOption (entity.GetInsetOpt world)
             let properties = entity.GetMaterialProperties world
             let staticModel = entity.GetStaticModel world
+            let clipped = entity.GetClipped world
             let depthTest = entity.GetDepthTest world
             let renderType =
                 match entity.GetRenderStyle world with
                 | Deferred -> DeferredRenderType
                 | Forward (subsort, sort) -> ForwardRenderType (subsort, sort)
-            World.renderStaticModelFast (&affineMatrix, castShadow, presence, insetOpt, &properties, staticModel, depthTest, renderType, renderPass, world)
+            World.renderStaticModelFast (&affineMatrix, castShadow, presence, insetOpt, &properties, staticModel, clipped, depthTest, renderType, renderPass, world)
 
     override this.GetAttributesInferred (entity, world) =
         let staticModel = entity.GetStaticModel world
@@ -3088,6 +3089,44 @@ type StaticModelSurfaceFacet () =
                 else [|Miss|]
             else [|Miss|]
         | ValueNone -> [|Miss|]
+
+[<AutoOpen>]
+module StaticModelSurfaceFacetExtensions2 =
+
+    type Entity with
+
+        /// Attempt to get the currently assigned albedo image, looking it up from metadata when unassigned.
+        member this.TryGetAlbedoImage world =
+            if this.Has<StaticModelSurfaceFacet> world then
+                let material = this.GetMaterial world
+                match material.AlbedoImageOpt with
+                | ValueSome _ as albedoImageOpt -> albedoImageOpt
+                | ValueNone ->
+                    let staticModel = this.GetStaticModel world
+                    match Metadata.tryGetStaticModelMetadata staticModel with
+                    | ValueSome metadata ->
+                        let surfaceIndex = this.GetSurfaceIndex world
+                        let surface = metadata.Surfaces.[surfaceIndex]
+                        match Metadata.tryGetStaticModelAlbedoImage surface.SurfaceMaterialIndex staticModel with
+                        | ValueSome _ as albedoImageOpt -> albedoImageOpt
+                        | ValueNone -> ValueNone
+                    | ValueNone -> ValueNone
+            else ValueNone
+
+        /// Attempt to get the currently assigned albedo image asset name, looking it up from metadata when unassigned.
+        /// Useful in editor because oftentimes the only useful identifying information about a static model surface is
+        /// its material assets, particularly its albedo image like so -
+        /// <code>
+        /// for entity in World.getEntities SelectedGroup world do
+        ///     match entity.TryGetAlbedoImageAssetName world with
+        ///     | ValueSome name when name.Contains "Glass" ->
+        ///         entity.SetRenderStyle (Forward (0.0f, 0.0f)) world
+        ///     | _ -> ()
+        /// </code>
+        member this.TryGetAlbedoImageAssetName world =
+            match this.TryGetAlbedoImage world with
+            | ValueSome albedoImage -> ValueSome albedoImage.AssetName
+            | ValueNone -> ValueNone
 
 [<AutoOpen>]
 module AnimatedModelFacetExtensions =
@@ -3762,6 +3801,7 @@ module FollowerFacetExtensions =
         member this.SetFollowTargetOpt (value : Entity option) world = this.Set (nameof this.FollowTargetOpt) value world
         member this.FollowTargetOpt = lens (nameof this.FollowTargetOpt) this this.GetFollowTargetOpt this.SetFollowTargetOpt
 
+/// Enables an entity to follow another entity (currently for 3D entities only).
 type FollowerFacet () =
     inherit Facet (false, false, false)
 

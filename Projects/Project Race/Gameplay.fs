@@ -5,6 +5,7 @@ open Prime
 open Nu
 open MyGame
 
+// this represents the state of gameplay simulation.
 type GameplayState =
     | Playing
     | Quit
@@ -26,9 +27,13 @@ type GameplayDispatcher () =
         settings.Position <- position
         settings.WheelForward <- v3Forward
         settings.SuspensionSpring <- JoltPhysicsSharp.SpringSettings (JoltPhysicsSharp.SpringMode.FrequencyAndDamping, 3.0f, 0.5f)
-        if not front then
+        if front then
+            settings.MaxBrakeTorque <- 0.0f
+            settings.MaxHandBrakeTorque <- 4000.0f
+        else
+            settings.MaxBrakeTorque <- 4000.0f
+            settings.MaxHandBrakeTorque <- 4000.0f
             settings.MaxSteerAngle <- 0.0f
-            settings.MaxHandBrakeTorque <- 0.0f
         settings
 
     static let makeVehicleProperties () =
@@ -80,10 +85,12 @@ type GameplayDispatcher () =
 
             // declare player car
             World.doEntityFromFile "PlayerCar" "Assets/Gameplay/Cars/Sedan/Sedan.nuentity"
-                [if initializing then Entity.VehicleProperties @= makeVehicleProperties ()] world
+                [if initializing then Entity.VehicleProperties @= makeVehicleProperties ()]
+                world
             let playerCar = world.DeclaredEntity
             let playerCarBodyId = playerCar.GetBodyId world
 
+            // process player input
             if World.isKeyboardKeyDown KeyboardKey.Up world then World.setBodyVehicleForwardInput 10.0f playerCarBodyId world
             elif World.isKeyboardKeyDown KeyboardKey.Down world then World.setBodyVehicleForwardInput -1.0f playerCarBodyId world
             else World.setBodyVehicleForwardInput 0.0f playerCarBodyId world

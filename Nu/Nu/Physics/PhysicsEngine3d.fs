@@ -95,6 +95,7 @@ type [<CustomEquality; NoComparison>] private UnscaledPointsKey =
     override this.GetHashCode () =
         this.HashCode
 
+/// The 2d implementation of PhysicsEngine in terms of Jolt Physics.
 type [<ReferenceEquality>] PhysicsEngine3d =
     private
         { PhysicsContext : PhysicsSystem
@@ -1288,6 +1289,28 @@ type [<ReferenceEquality>] PhysicsEngine3d =
                 finally physicsEngine.PhysicsContext.BodyLockInterface.UnlockRead &bodyLockRead
             | ValueNone -> failwith ("No body with BodyId = " + scstring bodyId + ".")
 
+        member physicsEngine.GetWheelSpeedAtClutch bodyId =
+            match physicsEngine.VehicleConstraints.TryGetValue bodyId with
+            | (true, vehicleConstraint) ->
+                let controller = vehicleConstraint.GetController<WheeledVehicleController> ()
+                controller.WheelSpeedAtClutch
+            | (false, _) -> 0.0f
+
+        member physicsEngine.GetWheelModelMatrix (wheelModelRight, wheelModelUp, wheelIndex, bodyId) =
+            match physicsEngine.VehicleConstraints.TryGetValue bodyId with
+            | (true, vehicleConstraint) when wheelIndex >= 0 && vehicleConstraint.WheelsCount >= wheelIndex ->
+                let mutable wheelModelRight = wheelModelRight
+                let mutable wheelModelUp = wheelModelUp
+                vehicleConstraint.GetWheelWorldTransform (wheelIndex, &wheelModelRight, &wheelModelUp)
+            | (_, _) -> m4Identity
+
+        member physicsEngine.GetWheelAngularVelocity (wheelIndex, bodyId) =
+            match physicsEngine.VehicleConstraints.TryGetValue bodyId with
+            | (true, vehicleConstraint) when wheelIndex >= 0 && vehicleConstraint.WheelsCount >= wheelIndex ->
+                let wheel = vehicleConstraint.GetWheel<WheelWV> wheelIndex
+                wheel.AngularVelocity
+            | (_, _) -> 0.0f
+
         member physicsEngine.RayCast (ray, collisionMask, closestOnly) =
             let ray = new Ray (&ray.Origin, &ray.Direction)
             let bodyFilterID bodyID =
@@ -1457,8 +1480,9 @@ type [<ReferenceEquality>] PhysicsEngine3d =
             physicsEngine.BodyConstraintUserData.Clear ()
             physicsEngine.BodyConstraints.Clear ()
 
-            // clear wheeled vehicle controllers and vehicle constraints
+            // clear vehicle step listeners and constraints
             for vehicleConstraint in physicsEngine.VehicleConstraints.Values do
+                physicsEngine.PhysicsContext.RemoveStepListener vehicleConstraint
                 physicsEngine.PhysicsContext.RemoveConstraint vehicleConstraint
             physicsEngine.VehicleConstraints.Clear ()
 

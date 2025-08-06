@@ -12,6 +12,7 @@ open SDL2
 open ImGuiNET
 open Prime
 
+/// Universal function definitions for the world (2/4).
 [<AutoOpen>]
 module WorldModule2 =
 
@@ -819,6 +820,8 @@ module WorldModule2 =
                     let entityState = World.getEntityState entity world
                     let element = Octelement.make entityState.VisibleInView entityState.StaticInPlay entityState.LightProbe entityState.Light entityState.Presence entityState.PresenceInPlay entityState.Bounds entity
                     Octree.addElement entityState.Presence entityState.PresenceInPlay entityState.Bounds element world.Octree
+            if SList.exists (fun (entity : Entity) -> entity.Has<LightProbe3dFacet> world && entity.GetProbeStale world) entities3d then
+                World.requestLightMapRender world
                 
         static member internal evictScreenElements screen world =
             let entities = World.getGroups screen world |> Seq.map (flip World.getEntities world) |> Seq.concat |> SArray.ofSeq
@@ -1514,7 +1517,6 @@ module WorldModule2 =
                     then hashSetPlus HashIdentity.Structural (Seq.filter (fun (group : Group) -> not (group.GetVisible world)) groups)
                     else hashSetPlus HashIdentity.Structural []
                 match renderPass with
-                | NormalPass -> World.getElements3dInView HashSet3dNormalCached world
                 | LightMapPass (_, lightMapBounds) ->
                     let hashSet = HashSet ()
                     World.getElements3dInViewBox lightMapBounds hashSet world
@@ -1523,11 +1525,12 @@ module WorldModule2 =
                             HashSet3dNormalCached.Add element |> ignore<bool>
                 | ShadowPass (_, _, shadowLightType, _, shadowFrustum) -> World.getElements3dInViewFrustum (shadowLightType <> DirectionalLight) true shadowFrustum HashSet3dNormalCached world
                 | ReflectionPass (_, _) -> ()
+                | NormalPass -> World.getElements3dInView HashSet3dNormalCached world
                 match renderPass with
-                | NormalPass -> World.getElements2dInView HashSet2dNormalCached world
                 | LightMapPass (_, _) -> ()
                 | ShadowPass (_, _, _, _, _) -> ()
                 | ReflectionPass (_, _) -> ()
+                | NormalPass -> World.getElements2dInView HashSet2dNormalCached world
                 world.Timers.RenderGatherTimer.Stop ()
 
                 // render game
@@ -1715,8 +1718,8 @@ module WorldModule2 =
             World.cleanUpSubsystems world |> ignore
             world.WorldExtension.Plugin.CleanUp ()
 
-        /// Run the game engine with the given handlers, but don't clean up at the end, and return the world.
-        static member runWithoutCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess liveness firstFrame (world : World) =
+        /// Run the game engine with the given handlers, but don't clean up at the end.
+        static member runWithoutCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess firstFrame (world : World) =
 
             // run loop if user-defined run-while predicate passes
             world.Timers.FrameTimer.Restart ()
@@ -1727,7 +1730,7 @@ module WorldModule2 =
                 World.preProcess world
                 preProcess world
                 world.Timers.PreProcessTimer.Stop ()
-                match liveness with
+                match World.getLiveness world with
                 | Live ->
 
                     // update screen transitioning process
@@ -1790,7 +1793,7 @@ module WorldModule2 =
 
                                                     // process tasklets that have been scheduled and are ready to run
                                                     world.Timers.TaskletsTimer.Restart ()
-                                                    WorldModule.TaskletProcessingStarted <- true
+                                                    WorldModule.EndFrameProcessingStarted <- true
                                                     World.processTasklets world
                                                     world.Timers.TaskletsTimer.Stop ()
                                                     match World.getLiveness world with
@@ -1834,7 +1837,7 @@ module WorldModule2 =
 
                                                                     // process rendering (1/2)
                                                                     let rendererProcess = World.getRendererProcess world
-                                                                    if not firstFrame then rendererProcess.Swap ()
+                                                                    if not firstFrame then rendererProcess.RequestSwap ()
 
                                                                     // process frame pacing mechanics
                                                                     if world.Timers.MainThreadTimer.IsRunning then
@@ -1903,7 +1906,7 @@ module WorldModule2 =
 
                                                                     // update time and recur
                                                                     world.Timers.FrameTimer.Stop ()
-                                                                    WorldModule.TaskletProcessingStarted <- false
+                                                                    WorldModule.EndFrameProcessingStarted <- false
                                                                     World.updateTime world
                                                                     if world.Advancing then
                                                                         World.publish () (Events.TimeUpdateEvent --> Game) Game world
@@ -1917,7 +1920,7 @@ module WorldModule2 =
 
                                                                     // recur or return
                                                                     match World.getLiveness world with
-                                                                    | Live -> World.runWithoutCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess liveness false world
+                                                                    | Live -> World.runWithoutCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess false world
                                                                     | Dead -> ()
                                                                 | Dead -> ()
                                                             | Dead -> ()
@@ -1934,8 +1937,8 @@ module WorldModule2 =
                 | Dead -> ()
 
         /// Run the game engine using the given world and returning exit code upon termination.
-        static member runWithCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess liveness firstFrame world =
-            try World.runWithoutCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess liveness firstFrame world
+        static member runWithCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess firstFrame world =
+            try World.runWithoutCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess firstFrame world
                 World.cleanUp world
                 Constants.Engine.ExitCodeSuccess
             with exn ->
@@ -1944,7 +1947,7 @@ module WorldModule2 =
                 Constants.Engine.ExitCodeFailure
 
 [<AutoOpen>]
-module EntityDispatcherModule2 =
+module EntityDispatcherModule =
 
     /// The ImSim dispatcher for entities.
     type [<AbstractClass>] EntityDispatcherImSim (is2d, physical, lightProbe, light) =
@@ -1995,6 +1998,8 @@ module EntityDispatcherModule2 =
 
         static member Properties =
             [define Entity.Absolute true
+             define Entity.Size Constants.Engine.EntityGuiSizeDefault
+             define Entity.Presence Omnipresent
              define Entity.ColorDisabled Constants.Gui.ColorDisabledDefault
              define Entity.Layout Manual
              define Entity.LayoutMargin v2Zero
@@ -2187,6 +2192,8 @@ module EntityDispatcherModule2 =
 
         static member Properties =
             [define Entity.Absolute true
+             define Entity.Size Constants.Engine.EntityGuiSizeDefault
+             define Entity.Presence Omnipresent
              define Entity.ColorDisabled Constants.Gui.ColorDisabledDefault
              define Entity.Layout Manual
              define Entity.LayoutMargin v2Zero
@@ -2211,6 +2218,7 @@ module EntityDispatcherModule2 =
         static member Properties =
             [define Entity.Size Constants.Engine.EntityVuiSizeDefault]
 
+/// Entity PropertyDescriptor functions.
 [<RequireQualifiedAccess>]
 module EntityPropertyDescriptor =
 
@@ -2248,7 +2256,7 @@ module EntityPropertyDescriptor =
              "Transition Properties"
         elif List.exists (fun (property : PropertyDefinition) -> propertyName = property.PropertyName) baseProperties then "Configuration Properties"
         elif propertyName = "MaterialProperties" then "Material Properties"
-        elif propertyName = "Material" then "Material Properties 2"
+        elif propertyName = "Material" || propertyName = "Clipped" then "Material Properties 2"
         elif propertyName = "NavShape" || propertyName = "Nav3dConfig" then "Navigation Properties"
         elif List.exists (fun (property : PropertyDefinition) -> propertyName = property.PropertyName) rigidBodyProperties then "Physics Properties"
         else "~ More Properties"
@@ -2492,6 +2500,7 @@ module GroupDispatcherModule =
         abstract UntruncateModel : current : 'model * incoming : 'model -> 'model
         default this.UntruncateModel (_, incoming) = incoming
 
+/// Group PropertyDescriptor functions.
 [<RequireQualifiedAccess>]
 module GroupPropertyDescriptor =
 
@@ -2707,6 +2716,7 @@ module ScreenDispatcherModule =
         abstract UntruncateModel : current : 'model * incoming : 'model -> 'model
         default this.UntruncateModel (_, incoming) = incoming
 
+/// Screen PropertyDescriptor functions.
 [<RequireQualifiedAccess>]
 module ScreenPropertyDescriptor =
 
@@ -2922,6 +2932,7 @@ module GameDispatcherModule =
         abstract UntruncateModel : current : 'model * incoming : 'model -> 'model
         default this.UntruncateModel (_, incoming) = incoming
 
+/// Game PropertyDescriptor functions.
 [<RequireQualifiedAccess>]
 module GamePropertyDescriptor =
 
@@ -2969,12 +2980,12 @@ module GamePropertyDescriptor =
 [<RequireQualifiedAccess>]
 module SimulantPropertyDescriptor =
 
-    let containsPropertyDescriptor propertyDescriptor (simulant : Simulant) world =
+    let containsPropertyDescriptor propertyName (simulant : Simulant) world =
         match simulant with
-        | :? Entity as entity -> EntityPropertyDescriptor.containsPropertyDescriptor propertyDescriptor entity world
-        | :? Group as group -> GroupPropertyDescriptor.containsPropertyDescriptor propertyDescriptor group world
-        | :? Screen as screen -> ScreenPropertyDescriptor.containsPropertyDescriptor propertyDescriptor screen world
-        | :? Game as game -> GamePropertyDescriptor.containsPropertyDescriptor propertyDescriptor game world
+        | :? Entity as entity -> EntityPropertyDescriptor.containsPropertyDescriptor propertyName entity world
+        | :? Group as group -> GroupPropertyDescriptor.containsPropertyDescriptor propertyName group world
+        | :? Screen as screen -> ScreenPropertyDescriptor.containsPropertyDescriptor propertyName screen world
+        | :? Game as game -> GamePropertyDescriptor.containsPropertyDescriptor propertyName game world
         | _ -> failwithumf ()
 
     let getPropertyDescriptors (simulant : Simulant) world =
@@ -3017,8 +3028,9 @@ module SimulantPropertyDescriptor =
         | :? Game as game -> GamePropertyDescriptor.trySetValue value propertyDescriptor game world
         | _ -> failwithumf ()
 
+/// Universal function definitions for the world (3/4).
 [<AutoOpen>]
-module WorldModule2' =
+module WorldModule3 =
 
     type World with
 
