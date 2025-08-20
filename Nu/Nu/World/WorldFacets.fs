@@ -1185,11 +1185,11 @@ type EffectFacet () =
                 (entity.GetEffectDescriptor world)
 
         // run effect, optionally destroying upon exhaustion
-        let (liveness, effect, dataToken) = Effect.run effect world
+        let (alive, effect, dataToken) = Effect.run effect world
         entity.SetParticleSystem effect.ParticleSystem world
         entity.SetEffectTagTokens effect.TagTokens world
         entity.SetEffectDataToken dataToken world
-        if liveness = Dead && entity.GetSelfDestruct world then
+        if not alive && entity.GetSelfDestruct world then
             World.destroyEntity entity world
 
     static let handleEffectDescriptorChange evt world =
@@ -2226,9 +2226,33 @@ type LayoutFacet () =
                 gridLayout perimeter margin dims flowDirectionOpt resizeChildren children world
             | Manual -> ()
 
+    static let performLayoutPlus (entity : Entity) world =
+        let mutable top = entity
+        let mutable currentOpt = Some top
+        while currentOpt.IsSome do
+            match top.GetMountOpt world with
+            | Some mount ->
+                let mountAddress = Relation.resolve top.EntityAddress mount
+                if  mountAddress.Names.Length > 3 then
+                    let mountee = Nu.Entity mountAddress
+                    if  mountee.GetExists world &&
+                        mountee.Has<LayoutFacet> world then
+                        match mountee.GetLayout world with
+                        | Flow _ -> top <- mountee; currentOpt <- Some top
+                        | Dock _ | Grid _ | Manual -> currentOpt <- None
+                    else currentOpt <- None
+                else currentOpt <- None
+            | None -> currentOpt <- None
+        performLayout top world
+
     static let handleLayout evt world =
         let entity = evt.Subscriber : Entity
         performLayout entity world
+        Cascade
+
+    static let handleLayoutPlus evt world =
+        let entity = evt.Subscriber : Entity
+        performLayoutPlus entity world
         Cascade
 
     static let handleMount evt world =
@@ -2263,7 +2287,8 @@ type LayoutFacet () =
     override this.Register (entity, world) =
         performLayout entity world
         World.sense handleMount entity.MountEvent entity (nameof LayoutFacet) world
-        World.sense handleLayout entity.Transform.ChangeEvent entity (nameof LayoutFacet) world
+        World.sense handleLayoutPlus entity.Size.ChangeEvent entity (nameof LayoutFacet) world
+        World.sense handleLayout entity.Perimeter.ChangeEvent entity (nameof LayoutFacet) world
         World.sense handleLayout entity.Layout.ChangeEvent entity (nameof LayoutFacet) world
         World.sense handleLayout entity.LayoutMargin.ChangeEvent entity (nameof LayoutFacet) world
 
