@@ -45,7 +45,7 @@
       [LightShadowSamples 3]
       [LightShadowBias 0.02]
       [LightShadowSampleScalar 0.02]
-      [LightShadowExponent 90]
+      [LightShadowExponent 40]
       [LightShadowDensity 10]
       [FogEnabled True]
       [FogStart 48]
