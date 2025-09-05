@@ -1668,7 +1668,7 @@ module WorldModule2 =
                             let lightId = light.GetId world
                             let shadowRotation = light.GetRotation world
                             let shadowForward = shadowRotation.Down
-                            let shadowUp = if abs (shadowForward.Dot v3Up) > 0.999f then v3Forward else v3Up // NOTE: we can't use OrthonormalUp for some reason.
+                            let shadowUp = if abs (shadowForward.Dot v3Up) > 0.999f then v3Forward else v3Up // NOTE: we can't use OrthonormalUp here for some reason.
                             let shadowNearDistance = Constants.Render.NearPlaneDistanceInterior
                             let shadowFarDistance = max (light.GetLightCutoff world) (shadowNearDistance * 2.0f)
 
@@ -1739,10 +1739,10 @@ module WorldModule2 =
                                 //maxY <- maxY + segmentCenterOffset.Y
                                 
                                 // compute segment frustum and render
+                                // TODO: attempt to cull based on the ortho frustum. Make sure to test it thoroughly
+                                // with rotated lights because our previous attempt (which was removed) was quite buggy!
                                 let segmentProjectionOrtho = Matrix4x4.CreateOrthographicOffCenter (minX, maxX, minY, maxY, minZ, maxZ)
-                                let segmentViewProjectionOrtho = segmentViewOrtho * segmentProjectionOrtho
-                                let segmentFrustum = Frustum segmentViewProjectionOrtho
-                                World.renderSimulantsInternal (ShadowPass (lightId, Some (i, segmentViewOrtho, segmentProjectionOrtho), lightType, shadowRotation, segmentFrustum)) world
+                                World.renderSimulantsInternal (ShadowPass (lightId, Some (i, segmentViewOrtho, segmentProjectionOrtho), lightType, shadowRotation, shadowFrustum)) world
 
                             // fin
                             shadowCascadesCount <- inc shadowCascadesCount
