@@ -955,15 +955,21 @@ module WorldModule2 =
         static member private processCoroutines (world : World) =
             if world.Advancing then
                 let coroutines = World.getCoroutines world
-                let coroutines' =
-                    OMap.fold (fun coroutines id (pred, coroutine) ->
-                        match Coroutine.step pred coroutine world.GameTime world with
-                        | CoroutineCancelled -> coroutines
-                        | CoroutineCompleted -> coroutines
-                        | CoroutineProgressing coroutine' -> OMap.add id (pred, coroutine') coroutines)
-                        (OMap.makeEmpty (OMap.getComparer coroutines) (OMap.getConfig coroutines))
+                let coroutinesRemaining =
+                    OMap.fold (fun coroutines id (scheduledTime, pred, coroutine) ->
+                        if pred () then
+                            if scheduledTime <= world.GameTime then
+                                match coroutine () with
+                                | Sleep (duration, continuation) ->
+                                    OMap.add id (scheduledTime + duration, pred, continuation) coroutines
+                                | Cancel | Complete -> coroutines
+                            else OMap.add id (scheduledTime, pred, coroutine) coroutines
+                        else coroutines)
+                        (OMap.makeEmpty (OMap.comparer coroutines) (OMap.config coroutines))
                         coroutines
-                World.setCoroutines coroutines' world
+                let coroutineKeys = coroutines |> SArray.ofSeq |> SArray.map fst
+                let coroutinesAdded = OMap.removeMany coroutineKeys (World.getCoroutines world)
+                World.setCoroutines (OMap.concat coroutinesRemaining coroutinesAdded) world
 
         static member private processTasklet simulant tasklet (taskletsNotRun : OMap<Simulant, World Tasklet UList>) (world : World) =
             let shouldRun =
@@ -976,7 +982,7 @@ module WorldModule2 =
             else
                 match taskletsNotRun.TryGetValue simulant with
                 | (true, taskletList) -> OMap.add simulant (UList.add tasklet taskletList) taskletsNotRun
-                | (false, _) -> OMap.add simulant (UList.singleton (OMap.getConfig taskletsNotRun) tasklet) taskletsNotRun
+                | (false, _) -> OMap.add simulant (UList.singleton (OMap.config taskletsNotRun) tasklet) taskletsNotRun
 
         static member private processTasklets (world : World) =
             let tasklets = World.getTasklets world
@@ -989,7 +995,7 @@ module WorldModule2 =
                         else taskletsNotRun)
                         taskletsNotRun
                         taskletList)
-                    (OMap.makeEmpty HashIdentity.Structural (OMap.getConfig tasklets))
+                    (OMap.makeEmpty HashIdentity.Structural (OMap.config tasklets))
                     tasklets
             let taskletsNotRun = OMap.filter (fun simulant _ -> World.getExists simulant world) taskletsNotRun
             World.restoreTasklets taskletsNotRun world
@@ -1662,7 +1668,7 @@ module WorldModule2 =
                             let lightId = light.GetId world
                             let shadowRotation = light.GetRotation world
                             let shadowForward = shadowRotation.Down
-                            let shadowUp = shadowForward.OrthonormalUp
+                            let shadowUp = if abs (shadowForward.Dot v3Up) > 0.999f then v3Forward else v3Up // NOTE: we can't use OrthonormalUp for some reason.
                             let shadowNearDistance = Constants.Render.NearPlaneDistanceInterior
                             let shadowFarDistance = max (light.GetLightCutoff world) (shadowNearDistance * 2.0f)
 

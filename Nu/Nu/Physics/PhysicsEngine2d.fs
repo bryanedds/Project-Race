@@ -91,10 +91,12 @@ and [<ReferenceEquality>] PhysicsEngine2d =
         (joint : Joint)
         (jointError : single)
         (integrationMessages : IntegrationMessage List) =
+        let jointBreakPointPixel = PhysicsEngine2d.toPixel joint.Breakpoint
+        let jointErrorPixel = PhysicsEngine2d.toPixel jointError
         let bodyJointBreakMessage =
             { BodyJointId = joint.Tag :?> BodyJointId
-              BreakingPoint = joint.Breakpoint
-              BreakingOverflow = jointError - joint.Breakpoint }
+              BreakingPoint = jointBreakPointPixel
+              BreakingOverflow = jointErrorPixel - jointBreakPointPixel }
         let integrationMessage = BodyJointBreakMessage bodyJointBreakMessage
         integrationMessages.Add integrationMessage
 
@@ -449,7 +451,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
         match resultOpt with
         | Some (joint, body, body2Opt) ->
             joint.Tag <- bodyJointId
-            joint.Breakpoint <- bodyJointProperties.BreakingPoint
+            joint.Breakpoint <- PhysicsEngine2d.toPhysics bodyJointProperties.BreakingPoint
             joint.CollideConnected <- bodyJointProperties.CollideConnected
             joint.Enabled <- bodyJointProperties.BodyJointEnabled && not bodyJointProperties.Broken
             joint.add_Broke physicsEngine.BreakHandler
@@ -680,6 +682,10 @@ and [<ReferenceEquality>] PhysicsEngine2d =
 
     interface PhysicsEngine with
 
+        member physicsEngine.GravityDefault =
+            let gravityDefault = Common.Vector2 (Constants.Physics.GravityDefault.X, Constants.Physics.GravityDefault.Y)
+            PhysicsEngine2d.toPixelV3 gravityDefault
+
         member physicsEngine.Gravity =
             PhysicsEngine2d.toPixelV3 physicsEngine.PhysicsContext.Gravity
 
@@ -744,22 +750,25 @@ and [<ReferenceEquality>] PhysicsEngine2d =
                     match fixture.Tag with
                     | :? BodyShapeIndex as bodyShapeIndex ->
                         if (int fixture.CollidesWith &&& collisionMask) <> 0 then
-                            let report = BodyIntersection.make bodyShapeIndex fraction (v3 point.X point.Y 0.0f) (v3 normal.X normal.Y 0.0f)
+                            let report = BodyIntersection.make bodyShapeIndex fraction (PhysicsEngine2d.toPixelV3 point) (v3 normal.X normal.Y 0.0f)
                             if fraction < fractionMin then
                                 fractionMin <- fraction
                                 closestOpt <- Some report
                             results.Add report
                     | _ -> ()
                     if closestOnly then fraction else 1.0f)
-            physicsEngine.PhysicsContext.RayCast
-                (callback,
-                 Common.Vector2 (ray.Origin.X, ray.Origin.Y),
-                 Common.Vector2 (ray.Origin.X + ray.Direction.X, ray.Origin.Y + ray.Direction.Y))
+            let point = PhysicsEngine2d.toPhysicsV2 ray.Origin
+            let offset = PhysicsEngine2d.toPhysicsV2 ray.Direction
+            physicsEngine.PhysicsContext.RayCast (callback, point, point + offset)
             if closestOnly then
                 match closestOpt with
                 | Some closest -> [|closest|]
                 | None -> [||]
             else Array.ofSeq results
+
+        member physicsEngine.ShapeCast (_, _, _, _, _) =
+            Log.warn "ShapeCast not implemented for PhysicsEngine2d."
+            [||] // TODO: P1: implement.
 
         member physicsEngine.HandleMessage physicsMessage =
             PhysicsEngine2d.handlePhysicsMessage physicsEngine physicsMessage
@@ -791,8 +800,8 @@ and [<ReferenceEquality>] PhysicsEngine2d =
                     // render fixtures in body
                     let (_, body) = bodyEntry.Value
                     let transform =
-                        Matrix3x2.CreateRotation body.Rotation
-                        * Matrix3x2.CreateTranslation (PhysicsEngine2d.toPixelV2 body.Position)
+                        Matrix3x2.CreateRotation body.Rotation *
+                        Matrix3x2.CreateTranslation (PhysicsEngine2d.toPixelV2 body.Position)
                     let eyeBounds = renderContext.EyeBounds
                     for fixture in body.FixtureList do
 
