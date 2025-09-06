@@ -1683,30 +1683,30 @@ module WorldModule2 =
                             // render cascades
                             for i in 0 .. dec Constants.Render.ShadowCascadeLevels do
 
-                                // compute segment frustum
-                                let segmentNear =
+                                // compute section frustum
+                                let sectionNear =
                                     match i with
                                     | 0 -> Constants.Render.NearPlaneDistanceInterior
                                     | _ -> shadowFarDistance * Constants.Render.ShadowCascadeLimits.[dec i]
-                                let segmentFar = shadowFarDistance * Constants.Render.ShadowCascadeLimits.[i]
-                                let segmentProjection = Matrix4x4.CreatePerspectiveFieldOfView (eyeFov, eyeAspectRatio, segmentNear, segmentFar)
-                                let segmentViewProjection = eyeView * segmentProjection
-                                let segmentFrustum = Frustum segmentViewProjection
+                                let sectionFar = shadowFarDistance * Constants.Render.ShadowCascadeLimits.[i]
+                                let sectionProjection = Matrix4x4.CreatePerspectiveFieldOfView (eyeFov, eyeAspectRatio, sectionNear, sectionFar)
+                                let sectionViewProjection = eyeView * sectionProjection
+                                let sectionFrustum = Frustum sectionViewProjection
 
                                 // compute frustum corners and center in world space
-                                let segmentCornersWorld = segmentFrustum.Corners
-                                let segmentCenterWorld = Array.sum segmentCornersWorld / single segmentCornersWorld.Length
+                                let sectionCornersWorld = sectionFrustum.Corners
+                                let sectionCenterWorld = Array.sum sectionCornersWorld / single sectionCornersWorld.Length
 
-                                // compute frustum corner bounds in world space
-                                let segmentViewOrtho = Matrix4x4.CreateLookAt (segmentCenterWorld, segmentCenterWorld + shadowForward, shadowUp)
+                                // compute frustum corner bounds in ortho space
+                                let sectionViewOrtho = Matrix4x4.CreateLookAt (sectionCenterWorld, sectionCenterWorld + shadowForward, shadowUp)
                                 let mutable minX = Single.MaxValue
                                 let mutable maxX = Single.MinValue
                                 let mutable minY = Single.MaxValue
                                 let mutable maxY = Single.MinValue
                                 let mutable minZ = Single.MaxValue
                                 let mutable maxZ = Single.MinValue
-                                for corner in segmentCornersWorld do
-                                    let cornerView = corner.Transform segmentViewOrtho
+                                for corner in sectionCornersWorld do
+                                    let cornerView = corner.Transform sectionViewOrtho
                                     minX <- min minX cornerView.X
                                     maxX <- max maxX cornerView.X
                                     minY <- min minY cornerView.Y
@@ -1714,35 +1714,37 @@ module WorldModule2 =
                                     minZ <- min minZ cornerView.Z
                                     maxZ <- max maxZ cornerView.Z
 
-                                // overflow segment to avoid awkward clipping
-                                let zMult = Constants.Render.ShadowCascadeOverflow
-                                if minZ < 0.0f then minZ <- minZ * zMult else minZ <- minZ / zMult
-                                if maxZ < 0.0f then maxZ <- maxZ / zMult else maxZ <- maxZ * zMult
+                                // add margins to section along Z's
+                                let depth = maxZ - minZ
+                                let margin = depth * Constants.Render.ShadowCascadeMarginRatio
+                                let margin = max margin Constants.Render.ShadowCascadeMarginSizeMin
+                                minZ <- minZ - margin
+                                maxZ <- maxZ + margin
 
-                                // snap segment center to shadow texel grid in light space to avoid shimmering
+                                // snap section center to shadow texel grid in light space to avoid shimmering
                                 //let eyeViewInverse = eyeView.Inverted
-                                //let segmentWidth = maxX - minX
-                                //let segmentHeight = maxY - minY
-                                //let shadowMapSize : Vector2 = world.GeometryViewport.ShadowTextureResolution.V2
-                                //let shadowTexelSize = v2 (segmentWidth / shadowMapSize.X) (segmentHeight / shadowMapSize.Y)
-                                //let segmentCenterShadow = segmentCenterWorld.Transform eyeView
-                                //let segmentCenterSnapped =
+                                //let sectionWidth = maxX - minX
+                                //let sectionHeight = maxY - minY
+                                //let shadowMapSize = world.GeometryViewport.ShadowTextureResolution.V2
+                                //let shadowTexelSize = v2 (sectionWidth / shadowMapSize.X) (sectionHeight / shadowMapSize.Y)
+                                //let sectionCenterShadow = sectionCenterWorld.Transform eyeView
+                                //let sectionCenterSnapped =
                                 //    v3
-                                //        (floor (segmentCenterShadow.X / shadowTexelSize.X) * shadowTexelSize.X)
-                                //        (floor (segmentCenterShadow.Y / shadowTexelSize.Y) * shadowTexelSize.Y)
-                                //        segmentCenterShadow.Z
-                                //let segmentCenterOrtho = segmentCenterSnapped.Transform eyeViewInverse
-                                //let segmentCenterOffset = segmentCenterOrtho - segmentCenterWorld
-                                //minX <- minX + segmentCenterOffset.X
-                                //maxX <- maxX + segmentCenterOffset.X
-                                //minY <- minY + segmentCenterOffset.Y
-                                //maxY <- maxY + segmentCenterOffset.Y
-                                
-                                // compute segment frustum and render
+                                //        (floor (sectionCenterShadow.X / shadowTexelSize.X) * shadowTexelSize.X)
+                                //        (floor (sectionCenterShadow.Y / shadowTexelSize.Y) * shadowTexelSize.Y)
+                                //        sectionCenterShadow.Z
+                                //let sectionCenterOrtho = sectionCenterSnapped.Transform eyeViewInverse
+                                //let sectionCenterOffset = sectionCenterOrtho - sectionCenterWorld
+                                //minX <- minX + sectionCenterOffset.X
+                                //maxX <- maxX + sectionCenterOffset.X
+                                //minY <- minY + sectionCenterOffset.Y
+                                //maxY <- maxY + sectionCenterOffset.Y
+
+                                // compute section frustum and render
                                 // TODO: attempt to cull based on the ortho frustum. Make sure to test it thoroughly
                                 // with rotated lights because our previous attempt (which was removed) was quite buggy!
-                                let segmentProjectionOrtho = Matrix4x4.CreateOrthographicOffCenter (minX, maxX, minY, maxY, minZ, maxZ)
-                                World.renderSimulantsInternal (ShadowPass (lightId, Some (i, segmentViewOrtho, segmentProjectionOrtho), lightType, shadowRotation, shadowFrustum)) world
+                                let sectionProjectionOrtho = Matrix4x4.CreateOrthographicOffCenter (minX, maxX, minY, maxY, minZ, maxZ)
+                                World.renderSimulantsInternal (ShadowPass (lightId, Some (i, sectionViewOrtho, sectionProjectionOrtho), lightType, shadowRotation, shadowFrustum)) world
 
                             // fin
                             shadowCascadesCount <- inc shadowCascadesCount
