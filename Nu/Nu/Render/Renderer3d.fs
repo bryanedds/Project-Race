@@ -3263,7 +3263,7 @@ type [<ReferenceEquality>] GlRenderer3d =
                     renderer.LightingConfig.LightShadowSamples renderer.LightingConfig.LightShadowBias renderer.LightingConfig.LightShadowSampleScalar renderer.LightingConfig.LightShadowExponent renderer.LightingConfig.LightShadowDensity
                     descriptor geometry shadowShader renderer.PhysicallyBasedTerrainVao renderer
 
-        // forward render surface shadows to filter buffer
+        // forward render surface shadows
         for struct (model, castShadow, presence, texCoordsOffset, properties, boneTransformsOpt, surface, _) in renderTasks.ForwardSorted do
             if castShadow then
                 match boneTransformsOpt with
@@ -3338,6 +3338,10 @@ type [<ReferenceEquality>] GlRenderer3d =
         (renderbuffer : uint)
         (framebuffer : uint) =
 
+        // send forward surfaces directly to sorted buffer since no sorting is needed for shadows
+        for struct (_, _, model, castShadow, presence, texCoordsOffset, properties, boneTransformsOpt, surface, depthTest) in renderTasks.Forward do
+            renderTasks.ForwardSorted.Add struct (model, castShadow, presence, texCoordsOffset, properties, boneTransformsOpt, surface, depthTest)
+
         // setup shadow frame buffer and viewport
         OpenGL.Gl.Viewport (0, 0, shadowResolution.X, shadowResolution.Y)
         OpenGL.Gl.BindRenderbuffer (OpenGL.RenderbufferTarget.Renderbuffer, renderbuffer)
@@ -3376,6 +3380,10 @@ type [<ReferenceEquality>] GlRenderer3d =
         (shadowCascade : OpenGL.Texture.Texture)
         (renderbuffer : uint)
         (framebuffer : uint) =
+
+        // send forward surfaces directly to sorted buffer since no sorting is needed for shadows
+        for struct (_, _, model, castShadow, presence, texCoordsOffset, properties, boneTransformsOpt, surface, depthTest) in renderTasks.Forward do
+            renderTasks.ForwardSorted.Add struct (model, castShadow, presence, texCoordsOffset, properties, boneTransformsOpt, surface, depthTest)
 
         // setup shadow frame buffer and viewport
         OpenGL.Gl.Viewport (0, 0, shadowResolution.X, shadowResolution.Y)
