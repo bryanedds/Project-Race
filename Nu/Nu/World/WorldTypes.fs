@@ -1990,11 +1990,13 @@ and [<NoEquality; NoComparison>] World =
     member this.UpdateTime =
         AmbientState.getUpdateTime this.AmbientState
 
-    /// Get the amount of clock time between this and the previous frame.
+    /// Get the amount of clock time (in seconds) between this and the previous frame. Clock time is the primary means
+    /// for scaling frame-based phenomena like speeds and impulses.
     member this.ClockDelta =
         AmbientState.getClockDelta this.AmbientState
 
-    /// Get the amount of clock time that has transpired since the world began advancing.
+    /// Get the amount of clock time (in seconds) that has transpired since the world began advancing. Clock time is
+    /// the primary means for scaling frame-based phenomena like speeds and impulses.
     member this.ClockTime =
         AmbientState.getClockTime this.AmbientState
 
@@ -2014,11 +2016,13 @@ and [<NoEquality; NoComparison>] World =
     member this.GameTime =
         AmbientState.getGameTime this.AmbientState
 
-    /// Get the amount of date time that has transpired between this and the previous frame.
+    /// Get the amount of date time that has transpired between this and the previous frame. This value is independent
+    /// of whether the world was or is advancing.
     member this.DateDelta =
         AmbientState.getDateDelta this.AmbientState
 
-    /// Get the date time as of the start of this frame.
+    /// Get the date time as of the start of this frame. This value is independent of whether the world was or is
+    /// advancing.
     member this.DateTime =
         AmbientState.getDateTime this.AmbientState
 

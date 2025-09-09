@@ -129,7 +129,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
         body.Enabled <- bodyProperties.Enabled
         body.SleepingAllowed <- bodyProperties.SleepingAllowed
         body.Position <- PhysicsEngine2d.toPhysicsV2 bodyProperties.Center
-        body.Rotation <- bodyProperties.Rotation.RollPitchYaw.Z
+        body.Rotation <- bodyProperties.Rotation.Angle2d
         body.SetFriction bodyProperties.Friction
         body.SetRestitution bodyProperties.Restitution
         body.LinearVelocity <- PhysicsEngine2d.toPhysicsV2 bodyProperties.LinearVelocity
@@ -367,7 +367,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
         // get fields
         let bodyId = createBodyMessage.BodyId
         let bodyProperties = createBodyMessage.BodyProperties
-        let bodyRotation = bodyProperties.Rotation.RollPitchYaw.Z
+        let bodyRotation = bodyProperties.Rotation.Angle2d
 
         // make the body
         let body = physicsEngine.PhysicsContext.CreateBody (PhysicsEngine2d.toPhysicsV2 bodyProperties.Center, bodyRotation)
@@ -527,7 +527,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
     static member private setBodyRotation (setBodyRotationMessage : SetBodyRotationMessage) physicsEngine =
         match physicsEngine.Bodies.TryGetValue setBodyRotationMessage.BodyId with
         | (true, (_, body)) ->
-            let rotation = setBodyRotationMessage.Rotation.RollPitchYaw.Z
+            let rotation = setBodyRotationMessage.Rotation.Angle2d
             if body.Rotation <> rotation then
                 body.Rotation <- rotation
                 do (body.Awake <- false; body.Awake <- true) // force sleep time to zero so that a transform message will be produced
@@ -540,7 +540,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
 
     static member private setBodyAngularVelocity (setBodyAngularVelocityMessage : SetBodyAngularVelocityMessage) physicsEngine =
         match physicsEngine.Bodies.TryGetValue setBodyAngularVelocityMessage.BodyId with
-        | (true, (_, body)) -> body.AngularVelocity <- setBodyAngularVelocityMessage.AngularVelocity.X
+        | (true, (_, body)) -> body.AngularVelocity <- setBodyAngularVelocityMessage.AngularVelocity.Z
         | (false, _) -> ()
 
     static member private applyBodyLinearImpulse (applyBodyLinearImpulseMessage : ApplyBodyLinearImpulseMessage) physicsEngine =
@@ -561,8 +561,8 @@ and [<ReferenceEquality>] PhysicsEngine2d =
     static member private applyBodyAngularImpulse (applyBodyAngularImpulseMessage : ApplyBodyAngularImpulseMessage) physicsEngine =
         match physicsEngine.Bodies.TryGetValue applyBodyAngularImpulseMessage.BodyId with
         | (true, (_, body)) ->
-            if not (Single.IsNaN applyBodyAngularImpulseMessage.AngularImpulse.X) then
-                body.ApplyAngularImpulse (applyBodyAngularImpulseMessage.AngularImpulse.X)
+            if not (Single.IsNaN applyBodyAngularImpulseMessage.AngularImpulse.Z) then
+                body.ApplyAngularImpulse (applyBodyAngularImpulseMessage.AngularImpulse.Z)
             else Log.info ("Applying invalid angular impulse '" + scstring applyBodyAngularImpulseMessage.AngularImpulse + "'; this may destabilize Aether.")
         | (false, _) -> ()
 
@@ -584,8 +584,8 @@ and [<ReferenceEquality>] PhysicsEngine2d =
     static member private applyBodyTorque (applyBodyTorqueMessage : ApplyBodyTorqueMessage) physicsEngine =
         match physicsEngine.Bodies.TryGetValue applyBodyTorqueMessage.BodyId with
         | (true, (_, body)) ->
-            if not (Single.IsNaN applyBodyTorqueMessage.Torque.X) then
-                body.ApplyTorque (applyBodyTorqueMessage.Torque.X)
+            if not (Single.IsNaN applyBodyTorqueMessage.Torque.Z) then
+                body.ApplyTorque (applyBodyTorqueMessage.Torque.Z)
             else Log.info ("Applying invalid torque '" + scstring applyBodyTorqueMessage.Torque + "'; this may destabilize Aether.")
         | (false, _) -> ()
 
@@ -595,8 +595,8 @@ and [<ReferenceEquality>] PhysicsEngine2d =
 
     static member private getBodyToGroundContactNormals bodyId physicsEngine =
         PhysicsEngine2d.getBodyContactNormals bodyId physicsEngine
-        |> Array.filter (fun normal ->
-            let theta = normal.V2.Dot Vector2.UnitY |> acos |> abs
+        |> Array.filter (fun contactNormal ->
+            let theta = contactNormal.Dot Vector3.UnitY |> max -1.0f |> min 1.0f |> abs |> acos
             theta <= Constants.Physics.GroundAngleMax)
  
     static member private getBodyToGroundContactNormalOpt bodyId physicsEngine =
@@ -652,9 +652,9 @@ and [<ReferenceEquality>] PhysicsEngine2d =
                     BodyTransformMessage
                         { BodyId = body.Tag :?> BodyId
                           Center = PhysicsEngine2d.toPixelV3 body.Position
-                          Rotation = (v3 0.0f 0.0f body.Rotation).RollPitchYaw
+                          Rotation = Quaternion.CreateFromAngle2d body.Rotation
                           LinearVelocity = PhysicsEngine2d.toPixelV3 body.LinearVelocity
-                          AngularVelocity = v3 body.AngularVelocity 0.0f 0.0f }
+                          AngularVelocity = v3 0.0f 0.0f body.AngularVelocity }
                 physicsEngine.IntegrationMessages.Add bodyTransformMessage
 
                 // manually sleep static bodies since aether won't sleep them itself
@@ -709,7 +709,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
 
         member physicsEngine.GetBodyAngularVelocity bodyId =
             let (_, body) = physicsEngine.Bodies.[bodyId]
-            v3 body.AngularVelocity 0.0f 0.0f
+            v3 0.0f 0.0f body.AngularVelocity
 
         member physicsEngine.GetBodyToGroundContactNormals bodyId =
             PhysicsEngine2d.getBodyToGroundContactNormals bodyId physicsEngine
