@@ -40,10 +40,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="DotRecast.Recast.Toolset" Version="2025.2.1" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<Reference Include="AssimpNet">
 			<HintPath>..\Nu.Dependencies\AssimpNet\netstandard2.1\AssimpNet.dll</HintPath>
 		</Reference>
@@ -65,10 +61,6 @@
 		<ProjectReference Include="..\Nu\Nu.fsproj" />
 		<ProjectReference Include="..\Nu.Math\Nu.Math.csproj" />
 		<ProjectReference Include="..\Nu.Spine\Nu.Spine.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<PackageReference Update="FSharp.Core" Version="9.0.300" />
 	</ItemGroup>
 
 </Project>
