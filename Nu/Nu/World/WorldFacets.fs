@@ -1499,7 +1499,7 @@ type RigidBodyFacet () =
          define Entity.GravityOverride None
          define Entity.CharacterProperties CharacterProperties.defaultProperties
          nonPersistent Entity.VehicleProperties VehiclePropertiesAbsent
-         define Entity.CollisionDetection Discontinuous
+         define Entity.CollisionDetection Discrete
          define Entity.CollisionCategories "1"
          define Entity.CollisionMask Constants.Physics.CollisionWildcard
          define Entity.PhysicsMotion SynchronizedMotion
@@ -1599,11 +1599,11 @@ module BodyJointFacetExtensions =
         member this.GetBodyJoint world : BodyJoint = this.Get (nameof this.BodyJoint) world
         member this.SetBodyJoint (value : BodyJoint) world = this.Set (nameof this.BodyJoint) value world
         member this.BodyJoint = lens (nameof this.BodyJoint) this this.GetBodyJoint this.SetBodyJoint
-        member this.GetBodyJointTarget world : Entity Relation = this.Get (nameof this.BodyJointTarget) world
-        member this.SetBodyJointTarget (value : Entity Relation) world = this.Set (nameof this.BodyJointTarget) value world
+        member this.GetBodyJointTarget world : Entity Address = this.Get (nameof this.BodyJointTarget) world
+        member this.SetBodyJointTarget (value : Entity Address) world = this.Set (nameof this.BodyJointTarget) value world
         member this.BodyJointTarget = lens (nameof this.BodyJointTarget) this this.GetBodyJointTarget this.SetBodyJointTarget
-        member this.GetBodyJointTarget2Opt world : Entity Relation option = this.Get (nameof this.BodyJointTarget2Opt) world
-        member this.SetBodyJointTarget2Opt (value : Entity Relation option) world = this.Set (nameof this.BodyJointTarget2Opt) value world
+        member this.GetBodyJointTarget2Opt world : Entity Address option = this.Get (nameof this.BodyJointTarget2Opt) world
+        member this.SetBodyJointTarget2Opt (value : Entity Address option) world = this.Set (nameof this.BodyJointTarget2Opt) value world
         member this.BodyJointTarget2Opt = lens (nameof this.BodyJointTarget2Opt) this this.GetBodyJointTarget2Opt this.SetBodyJointTarget2Opt
         member this.GetBodyJointEnabled world : bool = this.Get (nameof this.BodyJointEnabled) world
         member this.SetBodyJointEnabled (value : bool) world = this.Set (nameof this.BodyJointEnabled) value world
@@ -1626,12 +1626,12 @@ type BodyJointFacet () =
     inherit Facet (true, false, false)
 
     static let tryGetBodyTargetIds (entity : Entity) world =
-        match tryResolve entity (entity.GetBodyJointTarget world) with
+        match tryResolve (entity.GetBodyJointTarget world) entity with
         | Some targetEntity ->
             let targetId = { BodySource = targetEntity; BodyIndex = Constants.Physics.InternalIndex }
             match entity.GetBodyJointTarget2Opt world with
             | Some target2 ->
-                match tryResolve entity target2 with
+                match tryResolve target2 entity with
                 | Some target2Entity ->
                     let target2Id = { BodySource = target2Entity; BodyIndex = Constants.Physics.InternalIndex }
                     Some (targetId, Some target2Id)
@@ -1641,7 +1641,7 @@ type BodyJointFacet () =
 
     static member Properties =
         [define Entity.BodyJoint EmptyJoint
-         define Entity.BodyJointTarget (Relation.makeParent ())
+         define Entity.BodyJointTarget (Address.makeParent ())
          define Entity.BodyJointTarget2Opt None
          define Entity.BodyJointEnabled true
          define Entity.BreakingPoint Constants.Physics.BreakingPointDefault
@@ -2189,8 +2189,8 @@ type LayoutFacet () =
                     child.SetPositionLocal position.V3 world
                     child.SetSize size.V3 world
                 | DockTop ->
-                    let size = v2 perimeter.Width margins.W - margin
-                    let position = v2 0.0f (perimeterHeightHalf - margins.Z * 0.5f)
+                    let size = v2 perimeter.Width margins.Y - margin
+                    let position = v2 0.0f (-perimeterHeightHalf + margins.Y * 0.5f)
                     child.SetPositionLocal position.V3 world
                     child.SetSize size.V3 world
                 | DockRight ->
@@ -2199,8 +2199,8 @@ type LayoutFacet () =
                     child.SetPositionLocal position.V3 world
                     child.SetSize size.V3 world
                 | DockBottom ->
-                    let size = v2 perimeter.Width margins.Y - margin
-                    let position = v2 0.0f (-perimeterHeightHalf + margins.Y * 0.5f)
+                    let size = v2 perimeter.Width margins.W - margin
+                    let position = v2 0.0f (perimeterHeightHalf - margins.Z * 0.5f)
                     child.SetPositionLocal position.V3 world
                     child.SetSize size.V3 world
                 | DockLeft ->
@@ -2273,14 +2273,14 @@ type LayoutFacet () =
         while currentOpt.IsSome do
             match top.GetMountOpt world with
             | Some mount ->
-                let mountAddress = Relation.resolve top.EntityAddress mount
-                if  mountAddress.Names.Length > 3 then
+                let mountAddress = Address.resolve mount top.EntityAddress
+                if mountAddress.Names.Length > 3 then
                     let mountee = Nu.Entity mountAddress
                     if  mountee.GetExists world &&
                         mountee.Has<LayoutFacet> world then
                         match mountee.GetLayout world with
-                        | Flow _ -> top <- mountee; currentOpt <- Some top
-                        | Dock _ | Grid _ | Manual -> currentOpt <- None
+                        | Flow _ | Grid (_, Some _, _) -> top <- mountee; currentOpt <- Some top
+                        | Dock _ | Grid (_, None, _) | Manual -> currentOpt <- None
                     else currentOpt <- None
                 else currentOpt <- None
             | None -> currentOpt <- None
@@ -2332,6 +2332,7 @@ type LayoutFacet () =
         World.sense handleLayout entity.Perimeter.ChangeEvent entity (nameof LayoutFacet) world
         World.sense handleLayout entity.Layout.ChangeEvent entity (nameof LayoutFacet) world
         World.sense handleLayout entity.LayoutMargin.ChangeEvent entity (nameof LayoutFacet) world
+        World.sense handleLayoutPlus entity.LayoutOrder.ChangeEvent entity (nameof LayoutFacet) world
 
 [<AutoOpen>]
 module SkyBoxFacetExtensions =
@@ -2992,7 +2993,8 @@ type BasicStaticBillboardEmitterFacet () =
                               OpaqueDistanceOpt = ValueNone
                               FinenessOffsetOpt = match emitterProperties.FinenessOffsetOpt with ValueSome finenessOffset -> ValueSome finenessOffset | ValueNone -> descriptor.MaterialProperties.FinenessOffsetOpt
                               ScatterTypeOpt = match emitterProperties.ScatterTypeOpt with ValueSome scatterType -> ValueSome scatterType | ValueNone -> descriptor.MaterialProperties.ScatterTypeOpt
-                              SpecularScalarOpt = match emitterProperties.SpecularScalarOpt with ValueSome specularScalar -> ValueSome specularScalar | ValueNone -> descriptor.MaterialProperties.SpecularScalarOpt }
+                              SpecularScalarOpt = match emitterProperties.SpecularScalarOpt with ValueSome specularScalar -> ValueSome specularScalar | ValueNone -> descriptor.MaterialProperties.SpecularScalarOpt
+                              RefractiveIndexOpt = match emitterProperties.RefractiveIndexOpt with ValueSome refractiveIndex -> ValueSome refractiveIndex | ValueNone -> descriptor.MaterialProperties.RefractiveIndexOpt }
                         let emitterMaterial = entity.GetEmitterMaterial world
                         let material =
                             { AlbedoImageOpt = match emitterMaterial.AlbedoImageOpt with ValueSome albedoImage -> ValueSome albedoImage | ValueNone -> descriptor.Material.AlbedoImageOpt
