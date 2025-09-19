@@ -77,8 +77,6 @@ type GameplayDispatcher () =
 
             // process initialization
             let initializing = FQueue.contains Select selectionResults
-            if initializing then
-                World.mapRenderer3dConfig (fun config -> { config with SsrEnabled = true }) world
 
             // begin scene declaration
             World.beginGroupFromFile "Scene" "Assets/Gameplay/Scene.nugroup" [] world
