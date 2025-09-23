@@ -17,7 +17,7 @@ type PhysicsEngine2dRenderContext =
     inherit PhysicsEngineRenderContext
     abstract EyeBounds : Box2
     abstract DrawLine : start : Vector2 * stop : Vector2 * color : Color -> unit
-    abstract DrawCircle : position : Vector2 * radius : float32 * color : Color -> unit
+    abstract DrawCircle : position : Vector2 * radius : single * color : Color -> unit
 
 /// The 2d implementation of PhysicsEngine in terms of Aether Physics.
 and [<ReferenceEquality>] PhysicsEngine2d =
@@ -130,8 +130,6 @@ and [<ReferenceEquality>] PhysicsEngine2d =
         body.SleepingAllowed <- bodyProperties.SleepingAllowed
         body.Position <- PhysicsEngine2d.toPhysicsV2 bodyProperties.Center
         body.Rotation <- bodyProperties.Rotation.Angle2d
-        body.SetFriction bodyProperties.Friction
-        body.SetRestitution bodyProperties.Restitution
         body.LinearVelocity <- PhysicsEngine2d.toPhysicsV2 bodyProperties.LinearVelocity
         body.LinearDamping <- bodyProperties.LinearDamping
         body.AngularVelocity <- bodyProperties.AngularVelocity.Z
@@ -139,9 +137,6 @@ and [<ReferenceEquality>] PhysicsEngine2d =
         body.FixedRotation <- bodyProperties.AngularFactor.Z = 0.0f
         body.IgnoreGravity <- true // NOTE: body-specific gravity isn't supported by Aether, so we handle gravity ourselves.
         body.IgnoreCCD <- match bodyProperties.CollisionDetection with Discrete -> true | Continuous -> false
-        body.SetCollisionCategories (enum<Category> bodyProperties.CollisionCategories)
-        body.SetCollidesWith (enum<Category> bodyProperties.CollisionMask)
-        body.SetIsSensor bodyProperties.Sensor
         body.Awake <- bodyProperties.Awake
 
     static member private attachBoxBody bodySource (bodyProperties : BodyProperties) (boxShape : BoxShape) (body : Body) =
@@ -154,6 +149,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
             match bodyProperties.Substance with
             | Density density -> density
             | Mass mass -> mass / (width * height)
+        let density = max 0.001f density // NOTE: Aether has collision reponse issue when density is 0 even if it's for a static shape!
         let shape =
             let rectangleVertices = Common.PolygonTools.CreateRectangle (width / 2.0f, height / 2.0f, offset, angle);
             let rectangleShape = Collision.Shapes.PolygonShape (rectangleVertices, density)
@@ -172,6 +168,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
             match bodyProperties.Substance with
             | Density density -> density
             | Mass mass -> mass / (MathF.PI * radius * radius)
+        let density = max 0.001f density // NOTE: Aether has collision reponse issue when density is 0 even if it's for a static shape!
         let shape = body.CreateCircle (radius, density, offset)
         shape.Tag <-
             { BodyId = { BodySource = bodySource; BodyIndex = bodyProperties.BodyIndex }
@@ -188,6 +185,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
             match bodyProperties.Substance with
             | Density density -> density
             | Mass mass -> mass / (endRadius * skinnyScalar * height * 0.5f + MathF.PI * endRadius * endRadius)
+        let density = max 0.001f density // NOTE: Aether has collision reponse issue when density is 0 even if it's for a static shape!
         let offset = PhysicsEngine2d.toPhysicsV2 transform.Translation
         let angle = transform.Rotation.Angle2d
         let rectangle = Common.PolygonTools.CreateRectangle (endRadius * skinnyScalar, height * 0.5f, offset, angle)
@@ -220,6 +218,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
             match bodyProperties.Substance with
             | Density density -> density
             | Mass mass -> mass / (width * height)
+        let density = max 0.001f density // NOTE: Aether has collision reponse issue when density is 0 even if it's for a static shape!
         let rectangleV = Common.PolygonTools.CreateRectangle (boxVerticalWidth * 0.5f, height * 0.5f * 0.9f, center, 0.0f) // scaled in height to stop corner sticking
         let rectangleH = Common.PolygonTools.CreateRectangle (width * 0.5f * 0.9f, boxHorizontalHeight * 0.5f, center, 0.0f) // scaled in width to stop corner sticking
         let list = List<Common.Vertices> ()
@@ -280,6 +279,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
             | Mass mass ->
                 let box = points' |> Array.map (fun v -> v2 v.X v.Y) |> Box2.Enclose // TODO: perhaps use a Sphere or Circle instead?
                 mass / (box.Width * box.Height)
+        let density = max 0.001f density // NOTE: Aether has collision reponse issue when density is 0 even if it's for a static shape!
         let bodyShape = body.CreatePolygon (Common.Vertices points', density)
         bodyShape.Tag <-
             { BodyId = { BodySource = bodySource; BodyIndex = bodyProperties.BodyIndex }
@@ -298,6 +298,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
             | Mass mass ->
                 let box = vertices' |> Array.map (fun v -> v2 v.X v.Y) |> Box2.Enclose // TODO: perhaps use a Sphere or Circle instead?
                 mass / (box.Width * box.Height)
+        let density = max 0.001f density // NOTE: Aether has collision reponse issue when density is 0 even if it's for a static shape!
         let triangles = vertices' |> Array.chunkBySize 3 |> Array.map Common.Vertices |> List
         let bodyShapes = body.CreateCompoundPolygon (triangles, density)
         for bodyShape in bodyShapes do
@@ -318,6 +319,7 @@ and [<ReferenceEquality>] PhysicsEngine2d =
             match bodyProperties.Substance with
             | Density density -> density
             | Mass mass -> mass / (bounds.Width * bounds.Height)
+        let density = max 0.001f density // NOTE: Aether has collision reponse issue when density is 0 even if it's for a static shape!
         let bodyShape = body.CreatePolygon (bounds.Corners |> Array.map (fun v -> Common.Vector2 (v.X, v.Y)) |> Common.Vertices, density)
         bodyShape.Tag <-
             { BodyId = { BodySource = bodySource; BodyIndex = bodyProperties.BodyIndex }
@@ -543,6 +545,34 @@ and [<ReferenceEquality>] PhysicsEngine2d =
         | (true, (_, body)) -> body.AngularVelocity <- setBodyAngularVelocityMessage.AngularVelocity.Z
         | (false, _) -> ()
 
+    static member private setBodyJointMotorEnabled (setBodyJointMotorEnabledMessage : SetBodyJointMotorEnabledMessage) physicsEngine =
+        match physicsEngine.Joints.TryGetValue setBodyJointMotorEnabledMessage.BodyJointId with
+        | (true, joint) ->
+            match joint with
+            | :? Dynamics.Joints.PrismaticJoint as joint -> joint.MotorEnabled <- setBodyJointMotorEnabledMessage.MotorEnabled
+            | :? Dynamics.Joints.RevoluteJoint as joint -> joint.MotorEnabled <- setBodyJointMotorEnabledMessage.MotorEnabled
+            | :? Dynamics.Joints.WheelJoint as joint -> joint.MotorEnabled <- setBodyJointMotorEnabledMessage.MotorEnabled
+            | _ -> ()
+        | (false, _) -> ()
+
+    static member private setBodyJointMotorSpeed (setBodyJointMotorSpeedMessage : SetBodyJointMotorSpeedMessage) physicsEngine =
+        match physicsEngine.Joints.TryGetValue setBodyJointMotorSpeedMessage.BodyJointId with
+        | (true, joint) ->
+            match joint with
+            | :? Dynamics.Joints.PrismaticJoint as joint -> joint.MotorSpeed <- setBodyJointMotorSpeedMessage.MotorSpeed
+            | :? Dynamics.Joints.RevoluteJoint as joint -> joint.MotorSpeed <- setBodyJointMotorSpeedMessage.MotorSpeed
+            | :? Dynamics.Joints.WheelJoint as joint -> joint.MotorSpeed <- setBodyJointMotorSpeedMessage.MotorSpeed
+            | _ -> ()
+        | (false, _) -> ()
+
+    static member private setBodyJointTargetAngle (setBodyJointTargetAngleMessage : SetBodyJointTargetAngleMessage) physicsEngine =
+        match physicsEngine.Joints.TryGetValue setBodyJointTargetAngleMessage.BodyJointId with
+        | (true, joint) ->
+            match joint with
+            | :? Dynamics.Joints.AngleJoint as joint -> joint.TargetAngle <- setBodyJointTargetAngleMessage.TargetAngle
+            | _ -> ()
+        | (false, _) -> ()
+
     static member private applyBodyLinearImpulse (applyBodyLinearImpulseMessage : ApplyBodyLinearImpulseMessage) physicsEngine =
         match physicsEngine.Bodies.TryGetValue applyBodyLinearImpulseMessage.BodyId with
         | (true, (_, body)) ->
@@ -590,14 +620,18 @@ and [<ReferenceEquality>] PhysicsEngine2d =
         | (false, _) -> ()
 
     static member private getBodyContactNormals bodyId physicsEngine =
-        PhysicsEngine2d.getBodyContacts bodyId physicsEngine
-        |> Array.map (fun (contact : Contact) -> let normal = fst (contact.GetWorldManifold ()) in Vector3 (normal.X, normal.Y, 0.0f))
+        [|for contact in PhysicsEngine2d.getBodyContacts bodyId physicsEngine do
+            let normal = fst (contact.GetWorldManifold ())
+            if normal <> Common.Vector2.Zero then // may be zero if from broad phase but not in narrow phase
+                let bodyShapeIndex = contact.FixtureA.Tag :?> BodyShapeIndex
+                let normal = if bodyShapeIndex.BodyId = bodyId then -normal else normal // negate normal when appropriate
+                Vector3 (normal.X, normal.Y, 0.0f)|]
 
     static member private getBodyToGroundContactNormals bodyId physicsEngine =
         PhysicsEngine2d.getBodyContactNormals bodyId physicsEngine
         |> Array.filter (fun contactNormal ->
-            let theta = contactNormal.Dot Vector3.UnitY |> max -1.0f |> min 1.0f |> abs |> acos
-            theta <= Constants.Physics.GroundAngleMax)
+            let theta = contactNormal.Dot Vector3.UnitY |> max -1.0f |> min 1.0f |> acos
+            theta <= Constants.Physics.GroundAngleMax && contactNormal.Y > 0.0f)
  
     static member private getBodyToGroundContactNormalOpt bodyId physicsEngine =
         match PhysicsEngine2d.getBodyToGroundContactNormals bodyId physicsEngine with
@@ -631,10 +665,13 @@ and [<ReferenceEquality>] PhysicsEngine2d =
         | SetBodyRotationMessage setBodyRotationMessage -> PhysicsEngine2d.setBodyRotation setBodyRotationMessage physicsEngine
         | SetBodyLinearVelocityMessage setBodyLinearVelocityMessage -> PhysicsEngine2d.setBodyLinearVelocity setBodyLinearVelocityMessage physicsEngine
         | SetBodyAngularVelocityMessage setBodyAngularVelocityMessage -> PhysicsEngine2d.setBodyAngularVelocity setBodyAngularVelocityMessage physicsEngine
-        | SetBodyVehicleForwardInputMessage _ -> () // no vehicle support
-        | SetBodyVehicleRightInputMessage _ -> () // no vehicle support
-        | SetBodyVehicleBrakeInputMessage _ -> () // no vehicle support
-        | SetBodyVehicleHandBrakeInputMessage _ -> () // no vehicle support
+        | SetBodyVehicleForwardInputMessage _ -> () // no vehicle controller support
+        | SetBodyVehicleRightInputMessage _ -> () // no vehicle controller support
+        | SetBodyVehicleBrakeInputMessage _ -> () // no vehicle controller support
+        | SetBodyVehicleHandBrakeInputMessage _ -> () // no vehicle controller support
+        | SetBodyJointMotorEnabledMessage setBodyJointMotorEnabledMessage -> PhysicsEngine2d.setBodyJointMotorEnabled setBodyJointMotorEnabledMessage physicsEngine
+        | SetBodyJointMotorSpeedMessage setBodyJointMotorSpeedMessage -> PhysicsEngine2d.setBodyJointMotorSpeed setBodyJointMotorSpeedMessage physicsEngine
+        | SetBodyJointTargetAngleMessage setBodyJointTargetAngleMessage -> PhysicsEngine2d.setBodyJointTargetAngle setBodyJointTargetAngleMessage physicsEngine
         | ApplyBodyLinearImpulseMessage applyBodyLinearImpulseMessage -> PhysicsEngine2d.applyBodyLinearImpulse applyBodyLinearImpulseMessage physicsEngine
         | ApplyBodyAngularImpulseMessage applyBodyAngularImpulseMessage -> PhysicsEngine2d.applyBodyAngularImpulse applyBodyAngularImpulseMessage physicsEngine
         | ApplyBodyForceMessage applyBodyForceMessage -> PhysicsEngine2d.applyBodyForce applyBodyForceMessage physicsEngine
@@ -740,14 +777,35 @@ and [<ReferenceEquality>] PhysicsEngine2d =
                 i <- inc i
             sensor
 
-        member physicsEngine.GetWheelSpeedAtClutch _ =
-            0.0f // no vehicle support
+        member physicsEngine.GetBodyWheelSpeedAtClutch _ =
+            0.0f // no vehicle controller support
 
-        member physicsEngine.GetWheelModelMatrix (_, _, _, _) =
-            m4Identity // no vehicle support
+        member physicsEngine.GetBodyWheelModelMatrix (_, _, _, _) =
+            m4Identity // no vehicle controller support
 
-        member physicsEngine.GetWheelAngularVelocity (_, _) =
-            0.0f // no vehicle support
+        member physicsEngine.GetBodyWheelAngularVelocity (_, _) =
+            0.0f // no vehicle controller support
+
+        member physicsEngine.GetBodyJointExists bodyJointId =
+            physicsEngine.Joints.ContainsKey bodyJointId
+
+        member physicsEngine.GetBodyJointMotorSpeed bodyJointId =
+            match physicsEngine.Joints.TryGetValue bodyJointId with
+            | (true, joint) ->
+                match joint with
+                | :? Dynamics.Joints.PrismaticJoint as joint -> joint.MotorSpeed
+                | :? Dynamics.Joints.RevoluteJoint as joint -> joint.MotorSpeed
+                | :? Dynamics.Joints.WheelJoint as joint -> joint.MotorSpeed
+                | _ -> 0.0f
+            | (false, _) -> 0.0f
+
+        member physicsEngine.GetBodyJointTargetAngle bodyJointId =
+            match physicsEngine.Joints.TryGetValue bodyJointId with
+            | (true, joint) ->
+                match joint with
+                | :? Dynamics.Joints.AngleJoint as joint -> joint.TargetAngle
+                | _ -> 0.0f
+            | (false, _) -> 0.0f
 
         member physicsEngine.RayCast (ray, collisionMask, closestOnly) =
             let results = List ()
@@ -851,8 +909,8 @@ and [<ReferenceEquality>] PhysicsEngine2d =
                             let vertices = chainShape.Vertices
                             if vertices.Count >= 2 then // when looped, the link from last point to first point is already included
                                 for i in 0 .. vertices.Count - 2 do
-                                    let start = (PhysicsEngine2d.toPixelV2 vertices[i]).Transform transform
-                                    let stop = (PhysicsEngine2d.toPixelV2 vertices[inc i]).Transform transform
+                                    let start = (PhysicsEngine2d.toPixelV2 vertices.[i]).Transform transform
+                                    let stop = (PhysicsEngine2d.toPixelV2 vertices.[inc i]).Transform transform
                                     let bounds = Box2.Enclose (start, stop)
                                     if eyeBounds.Contains bounds <> ContainmentType.Disjoint then
                                         renderContext.DrawLine (start, stop, color)

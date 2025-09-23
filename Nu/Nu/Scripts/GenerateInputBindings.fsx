@@ -2,12 +2,12 @@
 // Copyright (C) Bryan Edds.
 
 #I __SOURCE_DIRECTORY__
-#r "nuget: Aether.Physics2D, 2.1.0"
+#r "nuget: Aether.Physics2D, 2.2.0"
 #r "nuget: DotRecast.Recast.Toolset, 2025.2.1"
 #r "nuget: JoltPhysicsSharp, 2.18.4"
 #r "nuget: Magick.NET-Q8-AnyCpu, 14.8.1"
 #r "nuget: Pfim, 0.11.3"
-#r "nuget: Prime, 11.1.2"
+#r "nuget: Prime, 11.1.3"
 #r "nuget: System.Configuration.ConfigurationManager, 9.0.5"
 #r "nuget: System.Drawing.Common, 9.0.5"
 #r "nuget: Twizzle.ImGui-Bundle.NET, 1.91.5.2"

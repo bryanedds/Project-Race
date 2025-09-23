@@ -41,13 +41,16 @@
 	</Target>
 
 	<ItemGroup>
+        <None Include="Assets\*" />
+        <None Include="Assets\*\*" />
 		<Compile Include="NUnit.fs" />
 		<Compile Include="TestPlugin.fs" />
 		<Compile Include="AddressTests.fs" />
 		<Compile Include="CoroutineTests.fs" />
 		<Compile Include="QuadtreeTests.fs" />
 		<Compile Include="OctreeTests.fs" />
-		<Compile Include="World.Tests.fs" />
+		<Compile Include="WorldTests.fs" />
+		<Compile Include="TraversalInterpolatedFacetTests.fs" />
 		<Content Include="AssetGraph.nuag">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>

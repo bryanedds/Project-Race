@@ -81,7 +81,7 @@ module WorldEntityModule =
         member this.GetDispatcher world = World.getEntityDispatcher this world
         member this.Dispatcher = if notNull (this :> obj) then lensReadOnly (nameof this.Dispatcher) this this.GetDispatcher else Cached.Dispatcher
         member this.GetModelGeneric<'a> world = World.getEntityModelGeneric<'a> this world
-        member this.SetModelGeneric<'a> value world = World.setEntityModelGeneric<'a> false value this world |> ignore<bool>
+        member this.SetModelGeneric<'a> value world = World.setEntityModelGeneric<'a> false false value this world |> ignore<bool>
         member this.ModelGeneric<'a> () = lens Constants.Engine.ModelPropertyName this this.GetModelGeneric<'a> this.SetModelGeneric<'a>
         member this.GetFacets world = World.getEntityFacets this world
         member this.Facets = if notNull (this :> obj) then lensReadOnly (nameof this.Facets) this this.GetFacets else Cached.Facets
@@ -457,8 +457,8 @@ module WorldEntityModule =
                     let elevation = this.GetElevation world
                     this.SetElevationLocal 0.0f world
                     this.SetElevation elevation world
-                    this.SetEnabled (this.GetEnabledLocal world) world
-                    this.SetVisible (this.GetVisibleLocal world) world
+                    this.SetEnabled (this.GetEnabledLocal world) world // NOTE: redundant from SetMountOpt.
+                    this.SetVisible (this.GetVisibleLocal world) world // NOTE: redundant from SetMountOpt.
             | (None, Some mountNew) ->
                 if mountNew.GetExists world then
                     let affineMatrixMount = World.getEntityAffineMatrix mountNew world
@@ -550,7 +550,7 @@ module WorldEntityModule =
         member this.Is<'a> world = this.Is (typeof<'a>, world)
 
         /// Send a signal to an entity.
-        member this.Signal<'message, 'command> (signal : Signal) world = (this.GetDispatcher world).Signal (signal, this, world)
+        member this.Signal (signal : Signal) world = (this.GetDispatcher world).Signal (signal, this, world)
 
         /// Notify the engine that an entity's MMCC model has changed in some automatically undetectable way (such as being mutated directly by user code).
         member this.NotifyModelChange world = World.notifyEntityModelChange this world
