@@ -57,11 +57,11 @@ module WorldInputModule =
             let margin = v2 (single offset.X) (single offset.Y)
             MouseState.getPosition () - margin
 
-        /// Get the 2d screen position of the mouse.
-        static member getMousePosition2dScreen (world : World) =
+        /// Get the 2d inset position of the mouse.
+        static member getMousePosition2dInset (world : World) =
             let viewport = world.RasterViewport
             let mousePosition = World.getMousePosition world
-            Viewport.mouseTo2dScreen world.Eye2dCenter world.Eye2dSize mousePosition viewport
+            Viewport.mouseTo2dInset world.Eye2dCenter world.Eye2dSize mousePosition viewport
 
         /// Get the 2d world position of the mouse.
         static member getMousePosition2dWorld absolute (world : World) =
@@ -95,7 +95,7 @@ module WorldInputModule =
         static member isKeyboardKeyPressed key world =
             ignore (world : World)
             let io = ImGui.GetIO ()
-            if not (io.WantCaptureMouseGlobal)
+            if not (io.WantCaptureKeyboardGlobal)
             then KeyboardState.isKeyPressed key
             else false
 
