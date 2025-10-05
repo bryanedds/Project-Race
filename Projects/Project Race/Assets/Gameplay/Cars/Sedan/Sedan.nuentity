@@ -244,7 +244,24 @@
     [SurfaceIndex 10]]
    []]
   [StaticModelSurfaceDispatcher
-   [[MountOpt [Some ^]]
+   [[Material
+     [[AlbedoImageOpt
+       [Some [Default LightProbeModelAlbedo]]]
+      [RoughnessImageOpt
+       [Some [Default LightProbeModelRoughness]]]
+      [MetallicImageOpt
+       [Some [Default LightProbeModelMetallic]]]
+      [AmbientOcclusionImageOpt None]
+      [EmissionImageOpt None]
+      [NormalImageOpt
+       [Some [Default MaterialNormal]]]
+      [HeightImageOpt None]
+      [SubdermalImageOpt None]
+      [FinenessImageOpt None]
+      [ScatterImageOpt None]
+      [TwoSidedOpt None]
+      [ClippedOpt None]]]
+    [MountOpt [Some ^]]
     [Name Geometry12]
     [Offset [0 0.5938518 0.027595758]]
     [Position [-296.4521 1.0583487 211.4872]]
