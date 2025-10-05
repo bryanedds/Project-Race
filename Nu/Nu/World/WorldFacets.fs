@@ -987,9 +987,9 @@ module TextBoxFacetExtensions =
         member this.GetFocused world : bool = this.Get (nameof this.Focused) world
         member this.SetFocused (value : bool) world = this.Set (nameof this.Focused) value world
         member this.Focused = lens (nameof this.Focused) this this.GetFocused this.SetFocused
-        member this.GetCursor world : int = this.Get (nameof this.Cursor) world
-        member this.SetCursor (value : int) world = this.Set (nameof this.Cursor) value world
-        member this.Cursor = lens (nameof this.Cursor) this this.GetCursor this.SetCursor
+        member this.GetCaret world : int = this.Get (nameof this.Caret) world
+        member this.SetCaret (value : int) world = this.Set (nameof this.Caret) value world
+        member this.Caret = lens (nameof this.Caret) this this.GetCaret this.SetCaret
         member this.TextEditEvent = Events.TextEditEvent --> this
         member this.FocusEvent = Events.FocusEvent --> this
 
@@ -1015,7 +1015,7 @@ type TextBoxFacet () =
     static let handleKeyboardKeyChange evt (world : World) =
         let entity = evt.Subscriber : Entity
         let data = evt.Data : KeyboardKeyData
-        let cursor = entity.GetCursor world
+        let caret = entity.GetCaret world
         let text = entity.GetText world
         if  world.Advancing &&
             entity.GetVisible world &&
@@ -1024,47 +1024,47 @@ type TextBoxFacet () =
             text.Length < entity.GetTextCapacity world then
             if data.Down then
                 if data.KeyboardKey = KeyboardKey.Left then 
-                    if cursor > 0 then
-                        let cursor = dec cursor
-                        entity.SetCursor cursor world
+                    if caret > 0 then
+                        let caret = dec caret
+                        entity.SetCaret caret world
                         let eventTrace = EventTrace.debug "TextBoxFacet" "handleKeyboardKeyChange" "" EventTrace.empty
-                        World.publishPlus { Text = text; Cursor = cursor } entity.TextEditEvent eventTrace entity true false world
+                        World.publishPlus { Text = text; Caret = caret } entity.TextEditEvent eventTrace entity true false world
                 elif data.KeyboardKey = KeyboardKey.Right then
-                    if cursor < text.Length then
-                        let cursor = inc cursor
+                    if caret < text.Length then
+                        let caret = inc caret
                         let eventTrace = EventTrace.debug "TextBoxFacet" "handleKeyboardKeyChange" "" EventTrace.empty
-                        World.publishPlus { Text = text; Cursor = cursor } entity.TextEditEvent eventTrace entity true false world
+                        World.publishPlus { Text = text; Caret = caret } entity.TextEditEvent eventTrace entity true false world
                 elif data.KeyboardKey = KeyboardKey.Home || data.KeyboardKey = KeyboardKey.Up then
-                    let cursor = 0
-                    entity.SetCursor cursor world
+                    let caret = 0
+                    entity.SetCaret caret world
                     let eventTrace = EventTrace.debug "TextBoxFacet" "handleKeyboardKeyChange" "" EventTrace.empty
-                    World.publishPlus { Text = text; Cursor = cursor } entity.TextEditEvent eventTrace entity true false world
+                    World.publishPlus { Text = text; Caret = caret } entity.TextEditEvent eventTrace entity true false world
                 elif data.KeyboardKey = KeyboardKey.End || data.KeyboardKey = KeyboardKey.Down then
-                    let cursor = text.Length
-                    entity.SetCursor cursor world
+                    let caret = text.Length
+                    entity.SetCaret caret world
                     let eventTrace = EventTrace.debug "TextBoxFacet" "handleKeyboardKeyChange" "" EventTrace.empty
-                    World.publishPlus { Text = text; Cursor = cursor } entity.TextEditEvent eventTrace entity true false world
+                    World.publishPlus { Text = text; Caret = caret } entity.TextEditEvent eventTrace entity true false world
                 elif data.KeyboardKey = KeyboardKey.Backspace then
-                    if cursor > 0 && text.Length > 0 then
-                        let text = String.take (dec cursor) text + String.skip cursor text
-                        let cursor = dec cursor
+                    if caret > 0 && text.Length > 0 then
+                        let text = String.take (dec caret) text + String.skip caret text
+                        let caret = dec caret
                         entity.SetText text world
-                        entity.SetCursor cursor world
+                        entity.SetCaret caret world
                         let eventTrace = EventTrace.debug "TextBoxFacet" "handleKeyboardKeyChange" "" EventTrace.empty
-                        World.publishPlus { Text = text; Cursor = cursor } entity.TextEditEvent eventTrace entity true false world
+                        World.publishPlus { Text = text; Caret = caret } entity.TextEditEvent eventTrace entity true false world
                 elif data.KeyboardKey = KeyboardKey.Delete then
                     let text = entity.GetText world
-                    if cursor >= 0 && cursor < text.Length then
-                        let text = String.take cursor text + String.skip (inc cursor) text
+                    if caret >= 0 && caret < text.Length then
+                        let text = String.take caret text + String.skip (inc caret) text
                         entity.SetText text world
                         let eventTrace = EventTrace.debug "TextBoxFacet" "handleKeyboardKeyChange" "" EventTrace.empty
-                        World.publishPlus { Text = text; Cursor = cursor } entity.TextEditEvent eventTrace entity true false world
+                        World.publishPlus { Text = text; Caret = caret } entity.TextEditEvent eventTrace entity true false world
             Resolve
         else Cascade
 
     static let handleTextInput evt (world : World) =
         let entity = evt.Subscriber : Entity
-        let cursor = entity.GetCursor world
+        let caret = entity.GetCaret world
         let text = entity.GetText world
         if  world.Advancing &&
             entity.GetVisible world &&
@@ -1072,14 +1072,14 @@ type TextBoxFacet () =
             entity.GetFocused world &&
             text.Length < entity.GetTextCapacity world then
             let text =
-                if cursor < 0 || cursor >= text.Length
+                if caret < 0 || caret >= text.Length
                 then text + string evt.Data.TextInput
-                else String.take cursor text + string evt.Data.TextInput + String.skip cursor text
-            let cursor = inc cursor
+                else String.take caret text + string evt.Data.TextInput + String.skip caret text
+            let caret = inc caret
             entity.SetText text world
-            if cursor >= 0 then entity.SetCursor cursor world
+            if caret >= 0 then entity.SetCaret caret world
             let eventTrace = EventTrace.debug "TextBoxFacet" "handleTextInput" "" EventTrace.empty
-            World.publishPlus { Text = text; Cursor = cursor } entity.TextEditEvent eventTrace entity true false world
+            World.publishPlus { Text = text; Caret = caret } entity.TextEditEvent eventTrace entity true false world
             Resolve
         else Cascade
 
@@ -1095,13 +1095,13 @@ type TextBoxFacet () =
          define Entity.TextShift Constants.Gui.TextShiftDefault
          define Entity.TextCapacity 14
          define Entity.Focused false
-         nonPersistent Entity.Cursor 0]
+         nonPersistent Entity.Caret 0]
 
     override this.Register (entity, world) =
         World.sense handleMouseLeftDown Game.MouseLeftDownEvent entity (nameof TextBoxFacet) world
         World.sense handleKeyboardKeyChange Game.KeyboardKeyChangeEvent entity (nameof TextBoxFacet) world
         World.sense handleTextInput Game.TextInputEvent entity (nameof TextBoxFacet) world
-        entity.SetCursor (entity.GetText world).Length world
+        entity.SetCaret (entity.GetText world).Length world
 
     override this.Render (_, entity, world) =
         let mutable transform = entity.GetTransform world
@@ -1114,14 +1114,14 @@ type TextBoxFacet () =
         let clipOpt = ValueSome transform.Bounds2d.Box2
         let justification = Justified (JustifyLeft, JustifyMiddle)
         let focused = entity.GetFocused world
-        let cursorOpt = if enabled && focused then Some (entity.GetCursor world) else None
+        let caretOpt = if enabled && focused then Some (entity.GetCaret world) else None
         let margin = (entity.GetTextMargin world).V3
         let color = if enabled then entity.GetTextColor world else entity.GetTextColorDisabled world
         let font = entity.GetFont world
         let fontSizing = entity.GetFontSizing world
         let fontStyling = entity.GetFontStyling world
         let text = entity.GetText world
-        World.renderGuiText absolute perimeter offset elevation shift clipOpt justification cursorOpt margin color font fontSizing fontStyling text world
+        World.renderGuiText absolute perimeter offset elevation shift clipOpt justification caretOpt margin color font fontSizing fontStyling text world
 
     override this.GetAttributesInferred (_, _) =
         AttributesInferred.important Constants.Engine.EntityGuiSizeDefault v3Zero
@@ -1641,7 +1641,7 @@ type BodyJointFacet () =
 
     static member Properties =
         [define Entity.BodyJoint EmptyJoint
-         define Entity.BodyJointTarget (Address.makeParent ())
+         define Entity.BodyJointTarget Address.parent
          define Entity.BodyJointTarget2Opt None
          define Entity.BodyJointEnabled true
          define Entity.BreakingPoint Constants.Physics.BreakingPointDefault
@@ -1685,6 +1685,118 @@ type BodyJointFacet () =
 
     override this.GetAttributesInferred (_, _) =
         AttributesInferred.unimportant
+
+[<AutoOpen>]
+module FluidEmitter2dFacetExtensions =
+    type Entity with
+        member this.GetFluidEnabled world : bool = this.Get (nameof Entity.FluidEnabled) world
+        member this.SetFluidEnabled (value : bool) world = this.Set (nameof Entity.FluidEnabled) value world
+        member this.FluidEnabled = lens (nameof Entity.FluidEnabled) this this.GetFluidEnabled this.SetFluidEnabled
+        member this.GetFluidParticles world : FluidParticle SArray = this.Get (nameof Entity.FluidParticles) world
+        member this.SetFluidParticles (value : FluidParticle SArray) world = this.Set (nameof Entity.FluidParticles) value world
+        member this.FluidParticles = lens (nameof Entity.FluidParticles) this this.GetFluidParticles this.SetFluidParticles
+        member this.GetFluidParticleRadius world : single = this.Get (nameof Entity.FluidParticleRadius) world
+        member this.SetFluidParticleRadius (value : single) world = this.Set (nameof Entity.FluidParticleRadius) value world
+        member this.FluidParticleRadius = lens (nameof Entity.FluidParticleRadius) this this.GetFluidParticleRadius this.SetFluidParticleRadius
+        member this.GetFluidParticleScale world : single = this.Get (nameof Entity.FluidParticleScale) world
+        member this.SetFluidParticleScale (value : single) world = this.Set (nameof Entity.FluidParticleScale) value world
+        member this.FluidParticleScale = lens (nameof Entity.FluidParticleScale) this this.GetFluidParticleScale this.SetFluidParticleScale
+        member this.GetFluidParticlesMax world : int = this.Get (nameof Entity.FluidParticlesMax) world
+        member this.SetFluidParticlesMax (value : int) world = this.Set (nameof Entity.FluidParticlesMax) value world
+        member this.FluidParticlesMax = lens (nameof Entity.FluidParticlesMax) this this.GetFluidParticlesMax this.SetFluidParticlesMax
+        member this.GetFluidParticleNeighborsMax world : int = this.Get (nameof Entity.FluidParticleNeighborsMax) world
+        member this.SetFluidParticleNeighborsMax (value : int) world = this.Set (nameof Entity.FluidParticleNeighborsMax) value world
+        member this.FluidParticleNeighborsMax = lens (nameof Entity.FluidParticleNeighborsMax) this this.GetFluidParticleNeighborsMax this.SetFluidParticleNeighborsMax
+        member this.GetFluidParticleCollisionTestsMax world : int = this.Get (nameof Entity.FluidParticleCollisionTestsMax) world
+        member this.SetFluidParticleCollisionTestsMax (value : int) world = this.Set (nameof Entity.FluidParticleCollisionTestsMax) value world
+        member this.FluidParticleCollisionTestsMax = lens (nameof Entity.FluidParticleCollisionTestsMax) this this.GetFluidParticleCollisionTestsMax this.SetFluidParticleCollisionTestsMax
+        member this.GetFluidCellRatio world : single = this.Get (nameof Entity.FluidCellRatio) world
+        member this.SetFluidCellRatio (value : single) world = this.Set (nameof Entity.FluidCellRatio) value world
+        member this.FluidCellRatio = lens (nameof Entity.FluidCellRatio) this this.GetFluidCellRatio this.SetFluidCellRatio
+        member this.GetViscocity world : single = this.Get (nameof Entity.Viscocity) world
+        member this.SetViscocity (value : single) world = this.Set (nameof Entity.Viscocity) value world
+        member this.Viscocity = lens (nameof Entity.Viscocity) this this.GetViscocity this.SetViscocity
+        member this.GetFluidEmitterId world : FluidEmitterId = this.Get (nameof Entity.FluidEmitterId) world
+        member this.FluidEmitterId = lensReadOnly (nameof Entity.FluidEmitterId) this this.GetFluidEmitterId
+        member this.FluidEmitterUpdateEvent = Events.FluidEmitterUpdateEvent --> this
+
+/// Augments an entity with the behavior of fluid emission.
+type FluidEmitter2dFacet () =
+    inherit Facet (false, false, false)
+
+    static let makeFluidEmitterDescriptor (entity : Entity) (world : World) =
+        FluidEmitterDescriptor2d
+            { ParticleRadius = entity.GetFluidParticleRadius world
+              ParticleScale = entity.GetFluidParticleScale world
+              ParticlesMax = entity.GetFluidParticlesMax world
+              NeighborsMax = entity.GetFluidParticleNeighborsMax world
+              CollisionTestsMax = entity.GetFluidParticleCollisionTestsMax world
+              CellSize = entity.GetFluidCellRatio world * entity.GetFluidParticleRadius world
+              Enabled = entity.GetFluidEnabled world
+              Viscosity = entity.GetViscocity world
+              LinearDamping = entity.GetLinearDamping world
+              SimulationBounds = (entity.GetBounds world).Box2
+              GravityOverride = entity.GetGravityOverride world |> Option.map (fun gravity -> gravity.V2) }
+
+    static let updateCallback (event : Event<_, Entity>) (world : World) =
+        let updateEmitter =
+            UpdateFluidEmitterMessage
+                { FluidEmitterId = event.Subscriber.GetFluidEmitterId world
+                  FluidEmitterDescriptor = makeFluidEmitterDescriptor event.Subscriber world }
+        World.handlePhysicsMessage2d updateEmitter world
+        Cascade
+
+    static member Properties =
+        [define Entity.FluidEnabled true
+         define Entity.FluidParticles SArray.empty
+         define Entity.FluidParticleRadius 40.0f
+         define Entity.FluidParticleScale 1.0f
+         define Entity.FluidParticlesMax 20000
+         define Entity.FluidParticleNeighborsMax 75
+         define Entity.FluidParticleCollisionTestsMax 20
+         define Entity.FluidCellRatio 0.667f
+         define Entity.Viscocity 0.004f
+         define Entity.LinearDamping 0.0f
+         define Entity.GravityOverride None
+         computed Entity.FluidEmitterId (fun (entity : Entity) _ -> { FluidEmitterSource = entity }) None]
+
+    override this.Register (emitter, world) =
+
+        // update fluid emitter when any of the descriptor properties is set
+        for event in
+            [emitter.FluidEnabled.ChangeEvent
+             emitter.FluidParticleRadius.ChangeEvent
+             emitter.FluidParticleScale.ChangeEvent
+             emitter.FluidParticlesMax.ChangeEvent
+             emitter.FluidParticleNeighborsMax.ChangeEvent
+             emitter.FluidParticleCollisionTestsMax.ChangeEvent
+             emitter.FluidCellRatio.ChangeEvent
+             emitter.Viscocity.ChangeEvent
+             emitter.LinearDamping.ChangeEvent
+             emitter.Bounds.ChangeEvent
+             emitter.GravityOverride.ChangeEvent] do
+            World.sense updateCallback event emitter (nameof FluidEmitter2dFacet) world
+
+        // set particles upon change
+        World.sense
+            (fun (event : Event<_, Entity>) world ->
+                let fluidParticles = event.Subscriber.GetFluidParticles world
+                let fluidEmitterId = event.Subscriber.GetFluidEmitterId world
+                World.setFluidParticles fluidParticles fluidEmitterId world
+                Cascade)
+            emitter.FluidParticles.ChangeEvent emitter (nameof FluidEmitter2dFacet) world
+
+    override this.RegisterPhysics (emitter, world) =
+        let createMessage =
+            CreateFluidEmitterMessage
+                { FluidEmitterId = emitter.GetFluidEmitterId world
+                  FluidParticles = emitter.GetFluidParticles world
+                  FluidEmitterDescriptor = makeFluidEmitterDescriptor emitter world }
+        World.handlePhysicsMessage2d createMessage world
+
+    override this.UnregisterPhysics (emitter, world) =
+        let destroyMessage = DestroyFluidEmitterMessage { FluidEmitterId = emitter.GetFluidEmitterId world }
+        World.handlePhysicsMessage2d destroyMessage world
 
 [<AutoOpen>]
 module TileMapFacetExtensions =

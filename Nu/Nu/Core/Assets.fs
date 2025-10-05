@@ -17,6 +17,7 @@ module AssetPatterns =
     let (|SongExtension|_|) extension = match extension with ".ogg" | ".mp3" -> Some extension | _ -> None
     let (|ModelExtension|_|) extension = match extension with ".fbx" | ".gltf" | ".glb" | ".dae" | ".obj" -> Some extension | _ -> None
     let (|CsvExtension|_|) extension = match extension with ".csv" -> Some extension | _ -> None
+    let (|CursorExtension|_|) extension = match extension with ".cur" -> Some extension | _ -> None
 
 /// The assets that come with the Nu Game Engine.
 [<RequireQualifiedAccess>]
@@ -47,9 +48,11 @@ module Assets =
         let [<Literal>] BallName = "Ball"
         let [<Literal>] BrickName = "Brick"
         let [<Literal>] PaddleName = "Paddle"
+        let [<Literal>] FluidName = "Fluid"
         let [<Literal>] StaticSpriteName = "StaticSprite"
         let [<Literal>] AnimatedSpriteName = "AnimatedSprite"
         let [<Literal>] SpineSkeletonName = "SpineSkeleton-pro"
+        let [<Literal>] CursorName = "Cursor"
         let [<Literal>] NuSlideName = "NuSlide"
         let [<Literal>] Character2dIdleName = "Character2dIdle"
         let [<Literal>] Character2dJumpName = "Character2dJump"

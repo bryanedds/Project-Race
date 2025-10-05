@@ -52,6 +52,9 @@ module ToyBoxExtensions =
         member this.GetGravities world : (string * Vector3) list = this.Get (nameof Screen.Gravities) world
         member this.SetGravities (value : (string * Vector3) list) world = this.Set (nameof Screen.Gravities) value world
         member this.Gravities = lens (nameof Screen.Gravities) this this.GetGravities this.SetGravities
+        member this.GetAvatarGravities world : (string * Vector3 option) list = this.Get (nameof Screen.AvatarGravities) world
+        member this.SetAvatarGravities (value : (string * Vector3 option) list) world = this.Set (nameof Screen.AvatarGravities) value world
+        member this.AvatarGravities = lens (nameof Screen.AvatarGravities) this this.GetAvatarGravities this.SetAvatarGravities
         
 // this is the dispatcher that defines the behavior of the screen where gameplay takes place.
 type ToyBoxDispatcher () =
@@ -270,8 +273,7 @@ type ToyBoxDispatcher () =
                 [Entity.Size @= v3 4f boxHeight 0f
                  Entity.StaticImage .= Assets.Default.Paddle
                  // paddles are thin, so use continuous collision detection to prevent tunnelling at high velocities
-                 Entity.CollisionDetection .= Continuous]
-                world |> ignore
+                 Entity.CollisionDetection .= Continuous] world |> ignore
 
         // declare revolute joints to link the bridge links together and to the anchors
         for (n1, n2) in Array.pairwise [|anchor1.Name; yield! names; anchor2.Name|] do
@@ -404,7 +406,7 @@ type ToyBoxDispatcher () =
                       // by 2 to use entity width instead.
                       TransformOpt = Some (Affine.make v3Zero (Quaternion.CreateFromAngle2d MathF.PI_OVER_2) (v3Dup 2f)) }
                  Entity.Size .= v3 torsoWidth torsoHeight 0f
-                 Entity.StaticImage .= Assets.Gameplay.Capsule
+                 Entity.StaticImage .= Assets.Gameplay.CapsuleImage
                  Entity.MountOpt .= None] world |> ignore
             let twoBodyJoint = TwoBodyJoint2d { CreateTwoBodyJoint = fun toPhysics _ a b ->
                 match revoluteAngle with
@@ -443,7 +445,7 @@ type ToyBoxDispatcher () =
                  Entity.BodyShape .= CapsuleShape
                     { Height = 0.5f; Radius = 0.25f; PropertiesOpt = None
                       TransformOpt = Some (Affine.make v3Zero (Quaternion.CreateFromAngle2d MathF.PI_OVER_2) (v3Dup 2f)) }
-                 Entity.StaticImage .= Assets.Gameplay.Capsule
+                 Entity.StaticImage .= Assets.Gameplay.CapsuleImage
                  Entity.MountOpt .= None] world |> ignore
             let twoBodyJoint = TwoBodyJoint2d { CreateTwoBodyJoint = fun toPhysics toPhysicsV2 a b ->
                 let jointPosition = toPhysicsV2 (pos - posIncrement / 2f)
@@ -547,7 +549,7 @@ type ToyBoxDispatcher () =
             World.doBall2d (spawnPositionToName gooSpawnPosition)
                 [Entity.Position |= spawnCenter + gooSpawnPosition
                  Entity.Size .= v3Dup 8f
-                 Entity.StaticImage .= Assets.Gameplay.Goo
+                 Entity.StaticImage .= Assets.Gameplay.GooImage
                  Entity.Substance .= Mass gooMass
                  if layer = dec numLayers then
                     Entity.Visible .= false
@@ -586,7 +588,7 @@ type ToyBoxDispatcher () =
                         [Entity.Position @= (otherGooPosition + gooPosition) / 2f
                          Entity.Size @= v3 direction.Magnitude 2f 0f
                          Entity.Rotation @= Quaternion.CreateLookAt2d direction.V2
-                         Entity.StaticImage .= Assets.Gameplay.Link
+                         Entity.StaticImage .= Assets.Gameplay.LinkImage
                          Entity.Elevation .= -0.5f] world |> ignore
 
     static let declareStrandbeest (name : string) spawnCenter world =
@@ -730,7 +732,7 @@ type ToyBoxDispatcher () =
                          Entity.Position @= (p1 + p2) / 2f
                          Entity.Size @= v3 (p2 - p1).Magnitude 2f 0f
                          Entity.Rotation @= Quaternion.CreateLookAt2d (p2 - p1).V2
-                         Entity.StaticImage .= Assets.Gameplay.Link
+                         Entity.StaticImage .= Assets.Gameplay.LinkImage
                          Entity.Color .= color 1f 1f 1f 0.2f
                          Entity.Elevation .= -0.6f
                          Entity.MountOpt .= None] world
@@ -755,6 +757,16 @@ type ToyBoxDispatcher () =
          ("<", defaultGravity.Transform (Quaternion.CreateFromAngle2d -MathF.PI_OVER_2))]
         |> List.randomShuffle
         |> List.cons ("v", defaultGravity) // Always start with the default down gravity
+
+    static let generateAvatarGravities (world : World) =
+        let defaultGravity = World.getGravityDefault2d world
+        [(">", Some <| defaultGravity.Transform (Quaternion.CreateFromAngle2d MathF.PI_OVER_2))
+         ("0", Some <| v3Zero)
+         ("^", Some <| defaultGravity.Transform (Quaternion.CreateFromAngle2d MathF.PI))
+         ("<", Some <| defaultGravity.Transform (Quaternion.CreateFromAngle2d -MathF.PI_OVER_2))
+         ("v", Some <| defaultGravity)]
+        |> List.randomShuffle
+        |> List.cons ("World", None) // Always start with None
     
     // here we define default property values
     static member Properties =
@@ -764,7 +776,8 @@ type ToyBoxDispatcher () =
          define Screen.DragState None
          define Screen.MenuPage MenuPage1
          define Screen.InfoOpened false
-         define Screen.Gravities []]
+         define Screen.Gravities []
+         define Screen.AvatarGravities []]
 
     // here we define the toy box's behavior
     override this.Process (selectionResults, toyBox, world) =
@@ -807,7 +820,7 @@ type ToyBoxDispatcher () =
                  // with "*" (i.e. all collision categories).
                  Entity.CollisionCategories .= "10"
                  Entity.Elevation .= -1f // draw order of the same elevation prioritizes entities with lower vertical position for 2D games
-                 Entity.StaticImage .= Assets.Gameplay.Background] world |> ignore
+                 Entity.StaticImage .= Assets.Gameplay.BackgroundImage] world |> ignore
 
             // declare avatar
             let (avatarBody, _) =
@@ -816,7 +829,6 @@ type ToyBoxDispatcher () =
             let avatar = world.DeclaredEntity
 
             // process avatar input
-            let gravity = World.getGravity2d world
             if World.isKeyboardKeyDown KeyboardKey.Left world then
                 World.applyBodyForce
                     ((-v3UnitX * if World.getBodyGrounded avatarBody world then 500f else 250f).Transform (avatar.GetRotation world))
@@ -825,7 +837,7 @@ type ToyBoxDispatcher () =
                 World.applyBodyForce
                     ((v3UnitX * if World.getBodyGrounded avatarBody world then 500f else 250f).Transform (avatar.GetRotation world))
                     None avatarBody world
-            if gravity = v3Zero then // float around when no gravity
+            if avatar.GetGravityOverride world |> Option.defaultValue (World.getGravity2d world) = v3Zero then // float around when no gravity
                 if World.isKeyboardKeyDown KeyboardKey.Up world then
                     World.applyBodyForce ((v3UnitY * 200f).Transform (avatar.GetRotation world))
                         None avatarBody world
@@ -884,6 +896,17 @@ type ToyBoxDispatcher () =
                      Entity.Text @= $"Gravity: {fst gravity}"
                      Entity.Elevation .= 1f] world then
                     toyBox.Gravities.Map List.tail world
+
+                // avatar gravity button
+                if toyBox.GetAvatarGravities world = [] then toyBox.SetAvatarGravities (generateAvatarGravities world) world
+                let gravity = List.head (toyBox.GetAvatarGravities world)
+                avatar.SetGravityOverride (snd gravity) world
+                if World.doButton $"Avatar Gravity"
+                    [Entity.Position .= v3 255f -50f 0f
+                     Entity.Text @= $"Avatar Gravity: {fst gravity}"
+                     Entity.Elevation .= 1f
+                     Entity.FontSizing .= Some 10] world then
+                    toyBox.AvatarGravities.Map List.tail world
 
             // switch screen button
             World.doButton Simulants.ToyBoxSwitchScreen.Name

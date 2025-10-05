@@ -55,10 +55,10 @@ module Engine =
 
     let [<Literal>] ExitCodeSuccess = 0
     let [<Literal>] ExitCodeFailure = 1
+    let [<Uniform>] mutable Meter2d = match ConfigurationManager.AppSettings.["Meter2d"] with null -> 32.0f | value -> scvalue value
     let [<Uniform>] mutable RunSynchronously = match ConfigurationManager.AppSettings.["RunSynchronously"] with null -> false | value -> scvalue value
     let [<Uniform>] mutable TickDeltaAveraging = match ConfigurationManager.AppSettings.["TickDeltaAveraging"] with null -> false | value -> scvalue value
     let [<Uniform>] TickDeltaMax = 1.0 / 10.0 * double Stopwatch.Frequency |> int64
-    let [<Uniform>] mutable Meter2d = match ConfigurationManager.AppSettings.["Meter2d"] with null -> 32.0f | value -> scvalue value
     let [<Uniform>] QuadtreeElementMagnitudeMax = 1000.0f // if volume is too big, will wreck quadtree performance
     let [<Uniform>] OctreeElementMagnitudeMax = 100.0f // if volume is too big, will wreck octree performance
     let [<Literal>] GameSortPriority = Single.MaxValue
@@ -165,7 +165,6 @@ module Engine =
 [<RequireQualifiedAccess>]
 module Render =
 
-    let [<Uniform>] VendorNamesExceptedFromSwapGlFinishRequirement = ["NVIDIA Corporation"; "AMD"; "ATI Technologies Inc."] // see https://github.com/bryanedds/Nu/wiki/Why-glFinish-for-Some-Drivers-or-Vendors
     let [<Literal>] IgnoreLightMapsName = "IgnoreLightMaps"
     let [<Literal>] OpaqueDistanceName = "OpaqueDistance"
     let [<Literal>] FinenessOffsetName = "FinenessOffset"
@@ -405,6 +404,7 @@ module Associations =
     let [<Literal>] Render2d = "Render2d"
     let [<Literal>] Render3d = "Render3d"
     let [<Literal>] Audio = "Audio"
+    let [<Literal>] Cursor = "Cursor"
 
 [<RequireQualifiedAccess>]
 module Gui =

@@ -50,8 +50,7 @@ type GameplayDispatcher () =
             // declare player
             World.doEntity<PlayerDispatcher> Simulants.GameplayPlayer.Name
                 [Entity.Position |= v3 0.0f 1.65f 0.0f
-                 Entity.Elevation .= 1.0f]
-                world
+                 Entity.Elevation .= 1.0f] world
 
             // collect characters for processing
             let characters = World.getEntitiesAs<CharacterDispatcher> Simulants.GameplayScene world
@@ -121,6 +120,10 @@ type GameplayDispatcher () =
             // declare quit button
             if World.doButton "Quit" [Entity.Position .= v3 232.0f -144.0f 0.0f; Entity.Elevation .= 10.0f; Entity.Text .= "Quit"] world then
                 screen.SetGameplayState Quit world
+
+            // ensure game is unpaused when quitting
+            if screen.GetGameplayState world = Quit then
+                World.setAdvancing true world
 
             // end scene declaration
             World.endGroup world

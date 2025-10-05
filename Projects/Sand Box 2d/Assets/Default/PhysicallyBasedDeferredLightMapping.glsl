@@ -79,7 +79,7 @@ float computeDepthRatio(vec3 minA, vec3 sizeA, vec3 minB, vec3 sizeB, vec3 posit
     vec3 intersectionMin = max(minA, minB);
     vec3 intersectionSize = min(minA + sizeA, minB + sizeB) - intersectionMin;
     vec2 intersectionRatios = rayBoxIntersectionRatios(position, direction, intersectionMin, intersectionSize);
-    return intersectionRatios |= vec2(0.0) ? intersectionRatios.y / (intersectionRatios.y - intersectionRatios.x) : 0.5;
+    return intersectionRatios != vec2(0.0) ? intersectionRatios.y / (intersectionRatios.y - intersectionRatios.x) : 0.5;
 }
 
 void main()
@@ -93,7 +93,7 @@ void main()
 
     // retrieve remaining data from geometry buffers
     vec4 normalPlus = texture(normalPlusTexture, texCoordsOut);
-    vec3 normal = normalPlus.xyz;
+    vec3 normal = normalize(normalPlus.xyz);
     bool ignoreLightMaps = normalPlus.w == 1.0;
 
     // compute nearest light map indices
@@ -127,7 +127,7 @@ void main()
 
     // subsume any contained light map or compute light map blending ratio
     float ratio = 0.0;
-    if (lm1 |= -1 && lm2 |= -1)
+    if (lm1 != -1 && lm2 != -1)
     {
         vec3 min1 = lightMapMins[lm1];
         vec3 size1 = lightMapSizes[lm1];

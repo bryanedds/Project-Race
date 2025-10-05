@@ -112,7 +112,7 @@ void main()
     vec4 position = depthToPosition(depth, texCoordsOut);
 
     // retrieve remaining data from geometry buffers
-    vec3 normal = texture(normalPlusTexture, texCoordsOut).xyz;
+    vec3 normal = normalize(texture(normalPlusTexture, texCoordsOut).xyz);
 
     // pre-compute resolution inverse
     vec2 ssaoResolutionInverse = vec2(1.0) / vec2(ssaoResolution);
@@ -153,7 +153,7 @@ void main()
         {
             // ensure sample is actually written
             float sampleDepth = texture(depthTexture, samplingPositionScreen).r;
-            if (sampleDepth |= 0.0)
+            if (sampleDepth != 0.0)
             {
                 // compute sample position in view space
                 vec4 samplePosition = depthToPosition(sampleDepth, samplingPositionScreen);

@@ -77,14 +77,13 @@ type RaceCourseDispatcher () =
                 [Entity.Size .= v3 640f 360f 0f
                  Entity.Elevation .= -1f
                  Entity.Absolute .= true // displays at the same screen location regardless of the eye position
-                 Entity.StaticImage .= Assets.Gameplay.Background] world
+                 Entity.StaticImage .= Assets.Gameplay.BackgroundImage] world
 
             // declare race track
             World.doBlock2d "Race Track"
                 [Entity.Size .= v3 1f 1f 0f
                  Entity.BodyShape .= ContourShape { Links = RaceTrackPoints; Closed = false; TransformOpt = None; PropertiesOpt = None }
-                 Entity.CollisionDetection .= Continuous // don't let the car wheels fall through the ground
-                 ] world |> ignore
+                 Entity.CollisionDetection .= Continuous] world |> ignore // keep car wheels above ground
             for (p1, p2) in Array.pairwise RaceTrackPoints do
                 World.doStaticSprite $"Race Track {p1} -> {p2}"
                     [Entity.Position .= (p1 + p2) / 2f
@@ -103,7 +102,7 @@ type RaceCourseDispatcher () =
                           Profile = Convex
                           TransformOpt = None
                           PropertiesOpt = None }
-                 Entity.StaticImage .= Assets.Gameplay.Car
+                 Entity.StaticImage .= Assets.Gameplay.CarImage
                  Entity.Substance .= Density 4f
                  Entity.Friction .= 0.2f] world |> ignore
             let car = world.DeclaredEntity
@@ -119,7 +118,7 @@ type RaceCourseDispatcher () =
                     [Entity.Position |= wheelPosition
                      Entity.Rotation |= quatIdentity
                      Entity.Size .= v3One * RaceCourseScale
-                     Entity.StaticImage .= Assets.Gameplay.Wheel
+                     Entity.StaticImage .= Assets.Gameplay.WheelImage
                      Entity.Substance .= Density (density * 2f)
                      Entity.Friction .= friction
                      Entity.Elevation .= 0.1f] world |> ignore
