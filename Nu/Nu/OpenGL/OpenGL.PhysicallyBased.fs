@@ -383,6 +383,8 @@ module PhysicallyBased =
           SsrrDetailUniform : int
           SsrrRefinementsMaxUniform : int
           SsrrRayThicknessUniform : int
+          SsrrDepthCutoffUniform : int
+          SsrrDepthCutoffMarginUniform : int
           SsrrDistanceCutoffUniform : int
           SsrrDistanceCutoffMarginUniform : int
           SsrrEdgeHorizontalMarginUniform : int
@@ -2000,6 +2002,8 @@ module PhysicallyBased =
         let ssrrDetailUniform = Gl.GetUniformLocation (shader, "ssrrDetail")
         let ssrrRefinementsMaxUniform = Gl.GetUniformLocation (shader, "ssrrRefinementsMax")
         let ssrrRayThicknessUniform = Gl.GetUniformLocation (shader, "ssrrRayThickness")
+        let ssrrDepthCutoffUniform = Gl.GetUniformLocation (shader, "ssrrDepthCutoff")
+        let ssrrDepthCutoffMarginUniform = Gl.GetUniformLocation (shader, "ssrrDepthCutoffMargin")
         let ssrrDistanceCutoffUniform = Gl.GetUniformLocation (shader, "ssrrDistanceCutoff")
         let ssrrDistanceCutoffMarginUniform = Gl.GetUniformLocation (shader, "ssrrDistanceCutoffMargin")
         let ssrrEdgeHorizontalMarginUniform = Gl.GetUniformLocation (shader, "ssrrEdgeHorizontalMargin")
@@ -2125,6 +2129,8 @@ module PhysicallyBased =
           SsrrDetailUniform = ssrrDetailUniform
           SsrrRefinementsMaxUniform = ssrrRefinementsMaxUniform
           SsrrRayThicknessUniform = ssrrRayThicknessUniform
+          SsrrDepthCutoffUniform = ssrrDepthCutoffUniform
+          SsrrDepthCutoffMarginUniform = ssrrDepthCutoffMarginUniform
           SsrrDistanceCutoffUniform = ssrrDistanceCutoffUniform
           SsrrDistanceCutoffMarginUniform = ssrrDistanceCutoffMarginUniform
           SsrrEdgeHorizontalMarginUniform = ssrrEdgeHorizontalMarginUniform
@@ -3461,6 +3467,8 @@ module PhysicallyBased =
          ssrrDetail : single,
          ssrrRefinementsMax : int,
          ssrrRayThickness : single,
+         ssrrDepthCutoff : single,
+         ssrrDepthCutoffMargin : single,
          ssrrDistanceCutoff : single,
          ssrrDistanceCutoffMargin : single,
          ssrrEdgeHorizontalMargin : single,
@@ -3507,6 +3515,8 @@ module PhysicallyBased =
         Gl.Uniform1 (shader.SsrrDetailUniform, ssrrDetail)
         Gl.Uniform1 (shader.SsrrRefinementsMaxUniform, ssrrRefinementsMax)
         Gl.Uniform1 (shader.SsrrRayThicknessUniform, ssrrRayThickness)
+        Gl.Uniform1 (shader.SsrrDepthCutoffUniform, ssrrDepthCutoff)
+        Gl.Uniform1 (shader.SsrrDepthCutoffMarginUniform, ssrrDepthCutoffMargin)
         Gl.Uniform1 (shader.SsrrDistanceCutoffUniform, ssrrDistanceCutoff)
         Gl.Uniform1 (shader.SsrrDistanceCutoffMarginUniform, ssrrDistanceCutoffMargin)
         Gl.Uniform1 (shader.SsrrEdgeHorizontalMarginUniform, ssrrEdgeHorizontalMargin)
@@ -3757,7 +3767,6 @@ module PhysicallyBased =
          lightShadowSampleScalar : single,
          lightShadowExponent : single,
          lightShadowDensity : single,
-         elementsCount : int,
          materials : PhysicallyBasedMaterial array,
          geometry : PhysicallyBasedGeometry,
          shader : PhysicallyBasedDeferredTerrainShader,
@@ -3833,7 +3842,7 @@ module PhysicallyBased =
         Hl.Assert ()
 
         // draw geometry
-        Gl.DrawElements (geometry.PrimitiveType, elementsCount, DrawElementsType.UnsignedInt, nativeint 0)
+        Gl.DrawElements (geometry.PrimitiveType, geometry.ElementCount, DrawElementsType.UnsignedInt, nativeint 0)
         Hl.ReportDrawCall 1
         Hl.Assert ()
 
