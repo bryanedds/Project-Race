@@ -1145,7 +1145,7 @@ type Renderer3d =
         eyeRotation : Quaternion ->
         eyeFieldOfView : single ->
         geometryViewport : Viewport ->
-        rasterViewport : Viewport ->
+        windowViewport : Viewport ->
         renderMessages : RenderMessage3d List -> unit
 
     /// Handle render clean up by freeing all loaded render assets.
@@ -1168,7 +1168,7 @@ type [<ReferenceEquality>] StubRenderer3d =
 type [<ReferenceEquality>] GlRenderer3d =
     private
         { mutable GeometryViewport : Viewport
-          mutable RasterViewport : Viewport
+          mutable WindowViewport : Viewport
           LazyTextureQueues : ConcurrentDictionary<OpenGL.Texture.LazyTexture ConcurrentQueue, OpenGL.Texture.LazyTexture ConcurrentQueue>
           TextureServer : OpenGL.Texture.TextureServer
           CubeMapVao : uint
@@ -1300,7 +1300,7 @@ type [<ReferenceEquality>] GlRenderer3d =
 
     static member private tryLoadTextureAsset (assetClient : AssetClient) (asset : Asset) renderer =
         GlRenderer3d.invalidateCaches renderer
-        match assetClient.TextureClient.TryCreateTextureFiltered (true, OpenGL.Texture.BlockCompressable asset.FilePath, asset.FilePath) with
+        match assetClient.TextureClient.TryCreateTextureFiltered (true, OpenGL.Texture.InferCompression asset.FilePath, asset.FilePath) with
         | Right texture ->
             Some texture
         | Left error ->
@@ -1548,9 +1548,9 @@ type [<ReferenceEquality>] GlRenderer3d =
             match OpenGL.Texture.TryCreateTextureData (minimal, filePath) with
             | Some textureData ->
                 let metadata = textureData.Metadata
-                let (blockCompressed, bytes) = textureData.Bytes
+                let (compressed, bytes) = textureData.Bytes
                 textureData.Dispose ()
-                Some (metadata, blockCompressed, bytes)
+                Some (metadata, compressed, bytes)
             | None -> None
         | None -> None
 
@@ -1857,9 +1857,9 @@ type [<ReferenceEquality>] GlRenderer3d =
             match geometryDescriptor.NormalImageOpt with
             | Some normalImage ->
                 match GlRenderer3d.tryGetTextureData false normalImage renderer with
-                | Some (metadata, blockCompressed, bytes) ->
+                | Some (metadata, compressed, bytes) ->
                     if metadata.TextureWidth * metadata.TextureHeight = positionsAndTexCoordses.Length then
-                        if not blockCompressed then
+                        if not compressed then
                             let scalar = 1.0f / single Byte.MaxValue
                             bytes
                             |> Array.map (fun b -> single b * scalar)
@@ -1879,9 +1879,9 @@ type [<ReferenceEquality>] GlRenderer3d =
             match geometryDescriptor.TintImageOpt with
             | Some tintImage ->
                 match GlRenderer3d.tryGetTextureData false tintImage renderer with
-                | Some (metadata, blockCompressed, bytes) ->
+                | Some (metadata, compressed, bytes) ->
                     if metadata.TextureWidth * metadata.TextureHeight = positionsAndTexCoordses.Length then
-                        if not blockCompressed then
+                        if not compressed then
                             let scalar = 1.0f / single Byte.MaxValue
                             bytes
                             |> Array.map (fun b -> single b * scalar)
@@ -1906,9 +1906,9 @@ type [<ReferenceEquality>] GlRenderer3d =
             match blendMaterial.BlendMap with
             | RgbaMap rgbaMap ->
                 match GlRenderer3d.tryGetTextureData false rgbaMap renderer with
-                | Some (metadata, blockCompressed, bytes) ->
+                | Some (metadata, compressed, bytes) ->
                     if metadata.TextureWidth * metadata.TextureHeight = positionsAndTexCoordses.Length then
-                        if not blockCompressed then
+                        if not compressed then
                             let scalar = 1.0f / single Byte.MaxValue
                             for i in 0 .. dec positionsAndTexCoordses.Length do
                                 // ARGB reverse byte order, from Drawing.Bitmap (windows).
@@ -1925,9 +1925,9 @@ type [<ReferenceEquality>] GlRenderer3d =
                 for i in 0 .. dec (min reds.Length 8) do
                     let red = reds.[i]
                     match GlRenderer3d.tryGetTextureData false red renderer with
-                    | Some (metadata, blockCompressed, bytes) ->
+                    | Some (metadata, compressed, bytes) ->
                         if metadata.TextureWidth * metadata.TextureHeight = positionsAndTexCoordses.Length then
-                            if not blockCompressed then
+                            if not compressed then
                                 for j in 0 .. dec positionsAndTexCoordses.Length do
                                     blendses.[j, i] <- single bytes.[j * 4 + 2] * scalar
                             else Log.info "Block-compressed images not supported for terrain blend images."
@@ -2228,12 +2228,17 @@ type [<ReferenceEquality>] GlRenderer3d =
 
                     // oriented up and planar, like a tree billboard
                     if planar then
-                        let forwardFlat = eyeRotation.Forward.WithY 0.0f
-                        if forwardFlat.MagnitudeSquared > 0.0f then
-                            let forward = forwardFlat.Normalized
-                            let yaw = MathF.Atan2 (forward.X, forward.Z) - MathF.PI
-                            Matrix4x4.CreateRotationY yaw
-                        else m4Identity
+                        let up = Vector3.UnitY
+                        let camRight = Vector3.Transform (Vector3.UnitX, eyeRotation)
+                        let rightFlat = Vector3 (camRight.X, 0.0f, camRight.Z)
+                        let right = if rightFlat.LengthSquared () > 0.000001f then Vector3.Normalize rightFlat else Vector3.UnitX
+                        let forwardCandidate = Vector3.Cross (right, up)
+                        let toCamera = eyeCenter - model.Translation
+                        let below = Vector3.Dot (forwardCandidate, toCamera) >= 0.0f
+                        let forward = if below then forwardCandidate else Vector3.Cross (up, right)
+                        (right, up, forward)
+                        |> Matrix4x4.CreateRotation
+                        |> Matrix4x4.Transpose
 
                     // oriented up and not planar, like a character billboard
                     else
@@ -3496,8 +3501,8 @@ type [<ReferenceEquality>] GlRenderer3d =
         (geometryFrustum : Frustum)
         (geometryProjection : Matrix4x4)
         (geometryViewProjection : Matrix4x4)
-        (rasterBounds : Box2i)
-        (rasterProjection : Matrix4x4)
+        (windowInset : Box2i)
+        (windowProjection : Matrix4x4)
         (framebuffer : uint) =
 
         // compute matrix arrays
@@ -3509,11 +3514,11 @@ type [<ReferenceEquality>] GlRenderer3d =
         let geometryProjectionInverse = geometryProjection.Inverted
         let geometryProjectionInverseArray = geometryProjectionInverse.ToArray ()
         let geometryViewProjectionArray = geometryViewProjection.ToArray ()
-        let rasterProjectionArray = rasterProjection.ToArray ()
-        let rasterProjectionInverse = rasterProjection.Inverted
-        let rasterProjectionInverseArray = rasterProjectionInverse.ToArray ()
-        let rasterViewProjectionSkyBox = viewSkyBox * rasterProjection
-        let rasterViewProjectionSkyBoxArray = rasterViewProjectionSkyBox.ToArray ()
+        let windowProjectionArray = windowProjection.ToArray ()
+        let windowProjectionInverse = windowProjection.Inverted
+        let windowProjectionInverseArray = windowProjectionInverse.ToArray ()
+        let windowViewProjectionSkyBox = viewSkyBox * windowProjection
+        let windowViewProjectionSkyBoxArray = windowViewProjectionSkyBox.ToArray ()
 
         // get ambient lighting, sky box opt, and fallback light map
         let (lightAmbientColor, lightAmbientBrightness, skyBoxOpt) = GlRenderer3d.getLastSkyBoxOpt renderPass renderer
@@ -3725,7 +3730,7 @@ type [<ReferenceEquality>] GlRenderer3d =
 
                 // deferred render light mapping quad
                 OpenGL.PhysicallyBased.DrawPhysicallyBasedDeferredLightMappingSurface
-                    (eyeCenter, viewInverseArray, rasterProjectionInverseArray,
+                    (eyeCenter, viewInverseArray, windowProjectionInverseArray,
                      depthTexture, normalPlusTexture,
                      lightMapOrigins, lightMapMins, lightMapSizes, min lightMapEnvironmentFilterMaps.Length renderTasks.LightMaps.Count,
                      renderer.PhysicallyBasedQuad, renderer.PhysicallyBasedShaders.DeferredLightMappingShader, renderer.PhysicallyBasedStaticVao)
@@ -3746,7 +3751,7 @@ type [<ReferenceEquality>] GlRenderer3d =
 
         // deferred render ambient quad
         OpenGL.PhysicallyBased.DrawPhysicallyBasedDeferredAmbientSurface
-            (eyeCenter, viewInverseArray, rasterProjectionInverseArray,
+            (eyeCenter, viewInverseArray, windowProjectionInverseArray,
              depthTexture, lightMappingTexture,
              lightAmbientColor, lightAmbientBrightness, lightMapAmbientColors, lightMapAmbientBrightnesses,
              renderer.PhysicallyBasedQuad, renderer.PhysicallyBasedShaders.DeferredAmbientShader, renderer.PhysicallyBasedStaticVao)
@@ -3763,7 +3768,7 @@ type [<ReferenceEquality>] GlRenderer3d =
 
         // deferred render irradiance quad
         OpenGL.PhysicallyBased.DrawPhysicallyBasedDeferredIrradianceSurface
-            (eyeCenter, viewInverseArray, rasterProjectionInverseArray,
+            (eyeCenter, viewInverseArray, windowProjectionInverseArray,
              depthTexture, normalPlusTexture, lightMappingTexture,
              lightMapFallback.IrradianceMap, lightMapIrradianceMaps,
              renderer.PhysicallyBasedQuad, renderer.PhysicallyBasedShaders.DeferredIrradianceShader, renderer.PhysicallyBasedStaticVao)
@@ -3780,7 +3785,7 @@ type [<ReferenceEquality>] GlRenderer3d =
 
         // deferred render environment filter quad
         OpenGL.PhysicallyBased.DrawPhysicallyBasedDeferredEnvironmentFilterSurface
-            (eyeCenter, viewInverseArray, rasterProjectionInverseArray,
+            (eyeCenter, viewInverseArray, windowProjectionInverseArray,
              depthTexture, materialTexture, normalPlusTexture, lightMappingTexture,
              lightMapFallback.EnvironmentFilterMap, lightMapEnvironmentFilterMaps, lightMapOrigins, lightMapMins, lightMapSizes,
              renderer.PhysicallyBasedQuad, renderer.PhysicallyBasedShaders.DeferredEnvironmentFilterShader, renderer.PhysicallyBasedStaticVao)
@@ -3920,7 +3925,7 @@ type [<ReferenceEquality>] GlRenderer3d =
         let fogEnabled = if renderer.LightingConfig.FogEnabled then 1 else 0
         let fogType = renderer.LightingConfig.FogType.Enumerate
         OpenGL.PhysicallyBased.DrawPhysicallyBasedDeferredCompositionSurface
-            (eyeCenter, viewInverseArray, rasterProjectionInverseArray, fogEnabled, fogType, renderer.LightingConfig.FogStart, renderer.LightingConfig.FogFinish, renderer.LightingConfig.FogDensity, renderer.LightingConfig.FogColor,
+            (eyeCenter, viewInverseArray, windowProjectionInverseArray, fogEnabled, fogType, renderer.LightingConfig.FogStart, renderer.LightingConfig.FogFinish, renderer.LightingConfig.FogDensity, renderer.LightingConfig.FogColor,
              depthTexture, colorTexture, fogAccumBlurTexture, renderer.PhysicallyBasedQuad, renderer.PhysicallyBasedShaders.DeferredCompositionShader, renderer.PhysicallyBasedStaticVao)
 
         // copy depths from geometry framebuffer to composition framebuffer
@@ -3936,7 +3941,7 @@ type [<ReferenceEquality>] GlRenderer3d =
         // attempt to render sky box to composition buffer
         match skyBoxOpt with
         | Some (cubeMapColor, cubeMapBrightness, cubeMap, _) ->
-            OpenGL.SkyBox.DrawSkyBox (viewSkyBoxArray, rasterProjectionArray, rasterViewProjectionSkyBoxArray, cubeMapColor, cubeMapBrightness, cubeMap, renderer.CubeMapGeometry, renderer.SkyBoxShader, renderer.CubeMapVao)
+            OpenGL.SkyBox.DrawSkyBox (viewSkyBoxArray, windowProjectionArray, windowViewProjectionSkyBoxArray, cubeMapColor, cubeMapBrightness, cubeMap, renderer.CubeMapGeometry, renderer.SkyBoxShader, renderer.CubeMapVao)
             OpenGL.Hl.Assert ()
         | None -> ()
 
@@ -3950,7 +3955,7 @@ type [<ReferenceEquality>] GlRenderer3d =
              (renderer.PhysicallyBasedShaders.ForwardAnimatedShader, renderer.PhysicallyBasedAnimatedVao)]
         for (shader, vao) in forwardShaderAndVaos do
             GlRenderer3d.beginPhysicallyBasedForwardShader
-                viewArray geometryProjectionArray geometryViewProjectionArray eyeCenter viewInverseArray rasterProjectionInverseArray renderer.LightingConfig.LightCutoffMargin lightAmbientColor lightAmbientBrightness renderer.LightingConfig.LightAmbientBoostCutoff renderer.LightingConfig.LightAmbientBoostScalar
+                viewArray geometryProjectionArray geometryViewProjectionArray eyeCenter viewInverseArray windowProjectionInverseArray renderer.LightingConfig.LightCutoffMargin lightAmbientColor lightAmbientBrightness renderer.LightingConfig.LightAmbientBoostCutoff renderer.LightingConfig.LightAmbientBoostScalar
                 renderer.LightingConfig.LightShadowSamples renderer.LightingConfig.LightShadowBias renderer.LightingConfig.LightShadowSampleScalar renderer.LightingConfig.LightShadowExponent renderer.LightingConfig.LightShadowDensity
                 fogEnabled fogType renderer.LightingConfig.FogStart renderer.LightingConfig.FogFinish renderer.LightingConfig.FogDensity renderer.LightingConfig.FogColor ssvfEnabled forwardSsvfSteps renderer.LightingConfig.SsvfAsymmetry renderer.LightingConfig.SsvfIntensity
                 ssrrEnabled renderer.LightingConfig.SsrrIntensity renderer.LightingConfig.SsrrDetail renderer.LightingConfig.SsrrRefinementsMax renderer.LightingConfig.SsrrRayThickness renderer.LightingConfig.SsrrDepthCutoff renderer.LightingConfig.SsrrDepthCutoffMargin renderer.LightingConfig.SsrrDistanceCutoff renderer.LightingConfig.SsrrDistanceCutoffMargin renderer.LightingConfig.SsrrEdgeHorizontalMargin renderer.LightingConfig.SsrrEdgeVerticalMargin
@@ -4112,12 +4117,12 @@ type [<ReferenceEquality>] GlRenderer3d =
              renderer.PhysicallyBasedQuad, renderer.FilterShaders.FilterPresentationShader, renderer.PhysicallyBasedStaticVao)
         OpenGL.Hl.Assert ()
 
-        // blit presentation buffer to raster buffer
+        // blit presentation buffer to window buffer
         OpenGL.Gl.BindFramebuffer (OpenGL.FramebufferTarget.ReadFramebuffer, presentationFramebuffer)
         OpenGL.Gl.BindFramebuffer (OpenGL.FramebufferTarget.DrawFramebuffer, framebuffer)
         OpenGL.Gl.BlitFramebuffer
             (0, 0, geometryResolution.X, geometryResolution.Y,
-             rasterBounds.Min.X, rasterBounds.Min.Y, rasterBounds.Max.X, rasterBounds.Max.Y,
+             windowInset.Min.X, windowInset.Min.Y, windowInset.Max.X, windowInset.Max.Y,
              OpenGL.ClearBufferMask.ColorBufferBit,
              OpenGL.BlitFramebufferFilter.Nearest)
         OpenGL.Hl.Assert ()
@@ -4132,7 +4137,7 @@ type [<ReferenceEquality>] GlRenderer3d =
         eyeRotation
         eyeFieldOfView
         geometryViewport
-        rasterViewport
+        windowViewport
         framebuffer
         (renderMessages : _ List)
         renderer =
@@ -4144,7 +4149,7 @@ type [<ReferenceEquality>] GlRenderer3d =
             OpenGL.PhysicallyBased.DestroyPhysicallyBasedBuffers renderer.PhysicallyBasedBuffers
             renderer.PhysicallyBasedBuffers <- OpenGL.PhysicallyBased.CreatePhysicallyBasedBuffers geometryViewport
             renderer.GeometryViewport <- geometryViewport
-        renderer.RasterViewport <- rasterViewport
+        renderer.WindowViewport <- windowViewport
 
         // categorize messages
         let userDefinedStaticModelsToDestroy =
@@ -4474,10 +4479,11 @@ type [<ReferenceEquality>] GlRenderer3d =
             let frustum = Viewport.getFrustum eyeCenter eyeRotation eyeFieldOfView geometryViewport
             let geometryProjection = Viewport.getProjection3d eyeFieldOfView geometryViewport
             let geometryViewProjection = view * geometryProjection
-            let rasterProjection = Viewport.getProjection3d eyeFieldOfView rasterViewport
+            let windowProjection = Viewport.getProjection3d eyeFieldOfView windowViewport
+            let inner = windowViewport.Inner
             GlRenderer3d.renderGeometry
                 frustumInterior frustumExterior frustumImposter lightBox normalPass normalTasks renderer
-                true None eyeCenter view viewSkyBox frustum geometryProjection geometryViewProjection rasterViewport.Inset rasterProjection
+                true None eyeCenter view viewSkyBox frustum geometryProjection geometryViewProjection inner windowProjection
                 framebuffer
 
         // clear light shadow indices
@@ -4518,7 +4524,7 @@ type [<ReferenceEquality>] GlRenderer3d =
         renderer.RenderPasses2 <- renderPasses
 
     /// Make a GlRenderer3d.
-    static member make glContext window geometryViewport rasterViewport =
+    static member make glContext window geometryViewport windowViewport =
 
         // start lazy texture server
         let sglWindow = match window with SglWindow sglWindow -> sglWindow.SglWindow
@@ -4594,14 +4600,14 @@ type [<ReferenceEquality>] GlRenderer3d =
 
         // create white texture
         let whiteTexture =
-            match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, false, "Assets/Default/White.png") with
+            match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.Uncompressed, "Assets/Default/White.png") with
             | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
             | Left error -> failwith ("Could not load white texture due to: " + error)
         OpenGL.Hl.Assert ()
 
         // create black texture
         let blackTexture =
-            match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, false, "Assets/Default/Black.png") with
+            match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.Uncompressed, "Assets/Default/Black.png") with
             | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
             | Left error -> failwith ("Could not load black texture due to: " + error)
         OpenGL.Hl.Assert ()
@@ -4697,7 +4703,7 @@ type [<ReferenceEquality>] GlRenderer3d =
 
         // get albedo metadata and texture
         let albedoTexture =
-            match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, true, "Assets/Default/MaterialAlbedo.dds") with
+            match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.ColorCompression, "Assets/Default/MaterialAlbedo.dds") with
             | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
             | Left error -> failwith ("Could not load albedo material texture due to: " + error)
         OpenGL.Hl.Assert ()
@@ -4705,39 +4711,39 @@ type [<ReferenceEquality>] GlRenderer3d =
         // create default physically-based material
         let physicallyBasedMaterial : OpenGL.PhysicallyBased.PhysicallyBasedMaterial =
             let roughnessTexture =
-                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, true, "Assets/Default/MaterialRoughness.dds") with
+                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.ColorCompression, "Assets/Default/MaterialRoughness.dds") with
                 | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
                 | Left error -> failwith ("Could not load material roughness texture due to: " + error)
             let metallicTexture =
-                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, true, "Assets/Default/MaterialMetallic.dds") with
+                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.ColorCompression, "Assets/Default/MaterialMetallic.dds") with
                 | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
                 | Left error -> failwith ("Could not load material metallic texture due to: " + error)
             let ambientOcclusionTexture =
-                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, true, "Assets/Default/MaterialAmbientOcclusion.dds") with
+                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.ColorCompression, "Assets/Default/MaterialAmbientOcclusion.dds") with
                 | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
                 | Left error -> failwith ("Could not load material ambient occlusion texture due to: " + error)
             let emissionTexture =
-                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, true, "Assets/Default/MaterialEmission.dds") with
+                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.ColorCompression, "Assets/Default/MaterialEmission.dds") with
                 | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
                 | Left error -> failwith ("Could not load material emission texture due to: " + error)
             let normalTexture =
-                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, false, "Assets/Default/MaterialNormal.dds") with
+                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.NormalCompression, "Assets/Default/MaterialNormal.dds") with
                 | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
                 | Left error -> failwith ("Could not load material normal texture due to: " + error)
             let heightTexture =
-                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, true, "Assets/Default/MaterialHeight.dds") with
+                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.ColorCompression, "Assets/Default/MaterialHeight.dds") with
                 | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
                 | Left error -> failwith ("Could not load material height texture due to: " + error)
             let subdermalTexture =
-                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, true, "Assets/Default/MaterialSubdermal.dds") with
+                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.ColorCompression, "Assets/Default/MaterialSubdermal.dds") with
                 | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
                 | Left error -> failwith ("Could not load material subdermal texture due to: " + error)
             let finenessTexture =
-                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, true, "Assets/Default/MaterialFineness.dds") with
+                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.ColorCompression, "Assets/Default/MaterialFineness.dds") with
                 | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
                 | Left error -> failwith ("Could not load material fineness texture due to: " + error)
             let scatterTexture =
-                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, true, "Assets/Default/MaterialSubdermal.dds") with
+                match OpenGL.Texture.TryCreateTextureGl (false, OpenGL.TextureMinFilter.LinearMipmapLinear, OpenGL.TextureMagFilter.Linear, true, true, OpenGL.Texture.ColorCompression, "Assets/Default/MaterialSubdermal.dds") with
                 | Right (metadata, textureId) -> OpenGL.Texture.EagerTexture { TextureMetadata = metadata; TextureId = textureId }
                 | Left error -> failwith ("Could not load material scatter texture due to: " + error)
             { AlbedoTexture = albedoTexture
@@ -4775,7 +4781,7 @@ type [<ReferenceEquality>] GlRenderer3d =
         // make renderer
         let renderer =
             { GeometryViewport = geometryViewport
-              RasterViewport = rasterViewport
+              WindowViewport = windowViewport
               LazyTextureQueues = lazyTextureQueues
               TextureServer = textureServer
               CubeMapVao = cubeMapVao
@@ -4834,8 +4840,8 @@ type [<ReferenceEquality>] GlRenderer3d =
         member renderer.RendererConfig =
             renderer.RendererConfig
 
-        member renderer.Render frustumInterior frustumExterior frustumImposter lightBox eyeCenter eyeRotation eyeFieldOfView geometryViewport rasterViewport renderMessages =
-            GlRenderer3d.render frustumInterior frustumExterior frustumImposter lightBox eyeCenter eyeRotation eyeFieldOfView geometryViewport rasterViewport 0u renderMessages renderer
+        member renderer.Render frustumInterior frustumExterior frustumImposter lightBox eyeCenter eyeRotation eyeFieldOfView geometryViewport windowViewport renderMessages =
+            GlRenderer3d.render frustumInterior frustumExterior frustumImposter lightBox eyeCenter eyeRotation eyeFieldOfView geometryViewport windowViewport 0u renderMessages renderer
 
         member renderer.CleanUp () =
 

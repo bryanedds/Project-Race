@@ -125781,10 +125781,10 @@
         </member>
         <member name="M:Khronos.GetProcAddressLinux.AddLibraryDirectory(System.String)">
             <summary>
-            Add a path of a directory as additional path for searching libraries.
+            Add a path of a directory as an additional path for searching libraries.
             </summary>
             <param name="libraryDirPath">
-            A <see cref="T:System.String"/> that specify the absolute path of the directory where the libraries are loaded using
+            A <see cref="T:System.String"/> that specifies the absolute path of the directory where the libraries are loaded using
             <see cref="M:Khronos.GetProcAddressLinux.GetProcAddress(System.String,System.String)"/> method.
             </param>
         </member>
