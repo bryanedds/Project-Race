@@ -396,6 +396,7 @@ and SnapshotType =
     | ReloadCode
     | Advance
     | Halt
+    | Step
     | UserDefinedSnapshot of Image AssetTag * string // a user-defined type of snapshot
 
     member this.Label =
@@ -438,6 +439,7 @@ and SnapshotType =
         | ReloadCode -> (scstringMemo this).Spaced
         | Advance -> (scstringMemo this).Spaced
         | Halt -> (scstringMemo this).Spaced
+        | Step -> (scstringMemo this).Spaced
         | UserDefinedSnapshot (_, label) -> label
 
 /// Generalized interface tag for late-bound objects.
@@ -981,7 +983,8 @@ and [<ReferenceEquality; CLIMutable>] GameState =
       Eye3dFrustumExterior : Frustum // OPTIMIZATION: cached value.
       Eye3dFrustumImposter : Frustum // OPTIMIZATION: cached value.
       Order : int64
-      Id : uint64 }
+      Id : uint64
+      Name : string }
 
     /// Copy a game state such as when, say, you need it to be mutated with reflection but you need to preserve persistence.
     static member copy this =
@@ -1038,7 +1041,8 @@ and [<ReferenceEquality; CLIMutable>] GameState =
           Eye3dFrustumExterior = Viewport.getFrustum eye3dCenter eye3dRotation eye3dFieldOfView viewportExterior
           Eye3dFrustumImposter = Viewport.getFrustum eye3dCenter eye3dRotation eye3dFieldOfView viewportImposter
           Order = Core.getTimeStampUnique ()
-          Id = Gen.id64 }
+          Id = Gen.id64
+          Name = Constants.Engine.GameName }
 
     interface SimulantState with
         member this.GetXtension () = this.Xtension
