@@ -77,6 +77,9 @@ type GameplayDispatcher () =
 
             // process initialization
             let initializing = FQueue.contains Select selectionResults
+            if initializing then
+                let rendererConfig = World.getRenderer3dConfig world
+                World.configureRenderer3d { rendererConfig with FxaaEnabled = true } world
 
             // begin scene declaration
             World.beginGroupFromFile "Scene" "Assets/Gameplay/Scene.nugroup" [] world
