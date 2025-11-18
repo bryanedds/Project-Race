@@ -128,16 +128,32 @@ vec3 saturate(vec3 rgb, float adjustment)
     return mix(intensity, rgb, adjustment);
 }
 
-vec2 encodeNormal(vec3 normal)
-{
-    return normal.xy * 0.5 + 0.5;
-}
-
 vec3 decodeNormal(vec2 normalEncoded)
 {
     vec2 xy = normalEncoded * 2.0 - 1.0;
     float z = sqrt(max(0.0, 1.0 - dot(xy, xy)));
     return normalize(vec3(xy, z));
+}
+
+float signNotZero(float f)
+{
+    return f >= 0.0 ? 1.0 : -1.0;
+}
+
+vec2 signNotZero(vec2 v)
+{
+    return vec2(signNotZero(v.x), signNotZero(v.y));
+}
+
+vec2 encodeOctahedral(vec3 v)
+{
+    float l1norm = abs(v.x) + abs(v.y) + abs(v.z);
+    vec2 result = v.xy * (1.0 / l1norm);
+    if (v.z < 0.0)
+    {
+        result = (1.0 - abs(result.yx)) * signNotZero(result.xy);
+    }
+    return result;
 }
 
 void main()
@@ -215,6 +231,11 @@ void main()
 
     // compute clear coat properties
     clearCoatPlus.r = texture(clearCoatTexture, texCoords).r * clearCoatPlusOut.r;
-    clearCoatPlus.g = texture(clearCoatRoughnessTexture, texCoords).r * clearCoatPlusOut.g;
-    clearCoatPlus.ba = encodeNormal(normalize(toWorld * decodeNormal(texture(clearCoatNormalTexture, texCoords).rg)));
+    if (clearCoatPlus.r > 0.0)
+    {
+        float clearCoatRoughness = texture(clearCoatRoughnessTexture, texCoords).r * max(0.0, clearCoatPlusOut.g);
+        vec3 clearCoatNormal = normalize(toWorld * decodeNormal(texture(clearCoatNormalTexture, texCoords).rg));
+        clearCoatPlus.g = clearCoatRoughness;
+        clearCoatPlus.ba = encodeOctahedral(clearCoatNormal);
+    }
 }

@@ -97,11 +97,24 @@ vec3 rotate(vec3 axis, float angle, vec3 v)
     return mix(dot(axis, v) * axis, v, cos(angle)) + cross(axis, v) * sin(angle);
 }
 
-vec3 decodeNormal(vec2 normalEncoded)
+float signNotZero(float f)
 {
-    vec2 xy = normalEncoded * 2.0 - 1.0;
-    float z = sqrt(max(0.0, 1.0 - dot(xy, xy)));
-    return normalize(vec3(xy, z));
+    return f >= 0.0 ? 1.0 : -1.0;
+}
+
+vec2 signNotZero(vec2 v)
+{
+    return vec2(signNotZero(v.x), signNotZero(v.y));
+}
+
+vec3 decodeOctahedral(vec2 o)
+{
+    vec3 v = vec3(o.x, o.y, 1.0 - abs(o.x) - abs(o.y));
+    if (v.z < 0.0)
+    {
+        v.xy = (1.0 - abs(v.yx)) * signNotZero(v.xy);
+    }
+    return normalize(v);
 }
 
 vec4 depthToPosition(float depth, vec2 texCoords)
@@ -775,7 +788,7 @@ void main()
     vec4 clearCoatPlus = texture(clearCoatPlusTexture, texCoordsOut);
     float clearCoat = clearCoatPlus.r;
     float clearCoatRoughness = clearCoatPlus.g;
-    vec3 clearCoatNormal = decodeNormal(clearCoatPlus.ba);
+    vec3 clearCoatNormal = decodeOctahedral(clearCoatPlus.ba);
 
     // clear accumulation buffers because there seems to exist a Mesa bug where glClear doesn't work on certain
     // platforms on this buffer - https://github.com/bryanedds/Nu/issues/800#issuecomment-3239861861
