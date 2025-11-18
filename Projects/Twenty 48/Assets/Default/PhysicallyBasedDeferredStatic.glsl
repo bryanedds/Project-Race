@@ -108,11 +108,6 @@ vec3 saturate(vec3 rgb, float adjustment)
     return mix(intensity, rgb, adjustment);
 }
 
-vec2 encodeNormal(vec3 normal)
-{
-    return normal.xy * 0.5 + 0.5;
-}
-
 vec3 decodeNormal(vec2 normalEncoded)
 {
     vec2 xy = normalEncoded * 2.0 - 1.0;
@@ -190,6 +185,12 @@ void main()
 
     // compute clear coat properties
     clearCoatPlus.r = texture(clearCoatTexture, texCoords).r * clearCoatPlusOut.r;
-    clearCoatPlus.g = texture(clearCoatRoughnessTexture, texCoords).r * clearCoatPlusOut.g;
-    clearCoatPlus.ba = encodeNormal(normalize(toWorld * decodeNormal(texture(clearCoatNormalTexture, texCoords).rg)));
+    if (clearCoatPlus.r > 0.0)
+    {
+        float clearCoatRoughness = texture(clearCoatRoughnessTexture, texCoords).r * max(0.0, clearCoatPlusOut.g);
+        vec3 clearCoatNormal = normalize(toWorld * decodeNormal(texture(clearCoatNormalTexture, texCoords).rg));
+        float clearCoatAddend = clearCoatNormal.z < 0.0 ? 2.0 : 0.0;
+        clearCoatPlus.g = clearCoatRoughness + clearCoatAddend;
+        clearCoatPlus.ba = clearCoatNormal.xy;
+    }
 }
