@@ -27,6 +27,7 @@ const int SHADOW_CASCADE_LEVELS = 3;
 const float SHADOW_CASCADE_SEAM_INSET = 0.005;
 const float SHADOW_CASCADE_DENSITY_BONUS = 0.5;
 const float SHADOW_FOV_MAX = 2.1;
+const float CLEAR_COAT_REFRACTIVE_INDEX = 1.5; // typical for automotive clear coat
 
 const vec4 SSVF_DITHERING[4] =
     vec4[](
@@ -807,13 +808,14 @@ void main()
         int lightType = lightTypes[i];
         bool lightPoint = lightType == 0;
         bool lightSpot = lightType == 1;
+        float hDotV, intensity;
         vec3 l, h, radiance;
-        float intensity = 0.0;
         if (lightPoint || lightSpot)
         {
             vec3 d = lightOrigin - position.xyz;
             l = normalize(d);
             h = normalize(v + l);
+            hDotV = max(dot(h,  v), 0.0);
             float distanceSquared = dot(d, d);
             float distance = sqrt(distanceSquared);
             float cutoffScalar = 1.0 - smoothstep(lightCutoff * (1.0 - lightCutoffMargin), lightCutoff, distance);
@@ -831,6 +833,7 @@ void main()
         {
             l = -lightDirections[i];
             h = normalize(v + l);
+            hDotV = max(dot(h, v), 0.0);
             intensity = 1.0;
             radiance = lightColors[i] * lightBrightnesses[i];
         }
@@ -850,7 +853,6 @@ void main()
         }
 
         // cook-torrance brdf
-        float hDotV = max(dot(h, v), 0.0);
         float ndf = distributionGGX(normal, h, roughness);
         float g = geometrySchlick(normal, v, l, roughness);
         vec3 f = fresnelSchlick(hDotV, f0);
@@ -864,6 +866,9 @@ void main()
         // mix in specularity of clear coat when desired
         if (clearCoat > 0.0)
         {
+            // f0 derived from refractive index
+            vec3 f0 = vec3(pow((CLEAR_COAT_REFRACTIVE_INDEX - 1.0) / (CLEAR_COAT_REFRACTIVE_INDEX + 1.0), 2.0));
+
             // cook-torrance brdf
             float ndf = distributionGGX(clearCoatNormal, h, clearCoatRoughness);
             float g = geometrySchlick(clearCoatNormal, v, l, clearCoatRoughness);
