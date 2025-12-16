@@ -24,7 +24,6 @@ open Nu.Gaia
 
 //////////////////////////////////////////////////////////////////////////////////////
 // TODO:                                                                            //
-// Perhaps look up (Value)Some-constructed default property values from overlayer.  //
 // Custom properties in order of priority:                                          //
 //  Enums                                                                           //
 //  Flag Enums                                                                      //
@@ -502,7 +501,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
         GaiaState.make
             projectDllPath editModeOpt freshlyLoaded OpenProjectImperativeExecution EditWhileAdvancing
             DesiredEye2dCenter DesiredEye3dCenter DesiredEye3dRotation (World.getMasterSoundVolume world) (World.getMasterSongVolume world)            
-            Snaps2dSelected Snaps2d Snaps3d NewEntityElevation NewEntityDistance AlternativeEyeTravelInput
+            Snaps2dSelected Snaps2d Snaps3d NewEntityElevation NewEntityDistance AlternativeEyeTravelInput OverlayMode
 
     let private printGaiaState gaiaState =
         PrettyPrinter.prettyPrintSymbol (valueToSymbol gaiaState) PrettyPrinter.defaultPrinter
@@ -822,17 +821,39 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
         if shouldSwallowMouseButton world then Resolve else Cascade
 
     let private handleNuLifeCycleGroup (evt : Event<LifeCycleEventData, Game>) world =
+
+        // handle tricky bits of group unregistration that occur due to selection state
         match evt.Data with
         | UnregisteringData simulant ->
+
+            // when currently the selected group, make sure we select another group, creating a default "Scene" group
+            // when necessary
             if SelectedGroup :> Simulant = simulant then
-                let groups = World.getGroups SelectedScreen world
-                if Seq.isEmpty groups then
-                    let group = createSceneGroup SelectedScreen world // create gui group if no group remains
-                    SelectedGroup <- group
-                else
-                    SelectedGroup <- Seq.head groups
+
+                // locate other selectable groups in the same screen
+                let selectables =
+                    world
+                    |> World.getGroups SelectedScreen
+                    |> Seq.filter (fun group -> group :> Simulant <> simulant)
+                if Seq.isEmpty selectables then
+
+                    // when no group remains and the one being unregistered is not the default "Scene" group that will
+                    // be automatically created elsewhere, create the default "Scene" group
+                    if simulant.Name <> "Scene" then
+                        let group = createSceneGroup SelectedScreen world 
+                        SelectedGroup <- group
+
+                    // otherwise leave SelectedGroup as-is since it will be recreated elsewhere
+                    else ()
+
+                // select the first selectable group
+                else SelectedGroup <- Seq.head selectables
+
+            // otherwise when the selected entity is a child of the unregistering group, deselect it
             elif (match SelectedEntityOpt with Some entity -> entity :> Simulant = simulant | None -> false) then
                 SelectedEntityOpt <- None
+
+        // otherwise nothing to do
         | _ -> ()
         Cascade
 
@@ -847,8 +868,8 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
         | None -> Cascade // just keep current group selection and screen if no screen selected
 
     let private handleNuExitRequest _ (_ : World) =
-        ShowConfirmExitDialog <- true
-        Cascade
+        if not (modal ()) then ShowConfirmExitDialog <- true
+        Resolve
 
     (* Editor Command Functions *)
 
@@ -1245,9 +1266,9 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                         |> Array.map (fun line -> line.Trim ())
                     let fsprojProjectLines = // TODO: see if we can pull these from the fsproj as well...
                         ["#r \"../../../../../Nu/Nu.Math/bin/" + Constants.Engine.BuildName + "/netstandard2.1/Nu.Math.dll\""
-                         "#r \"../../../../../Nu/Nu.Pipe/bin/" + Constants.Engine.BuildName + "/net10.0/Nu.Pipe.dll\""
-                         "#r \"../../../../../Nu/Nu.Spine/bin/" + Constants.Engine.BuildName + "/net10.0/Nu.Spine.dll\""
-                         "#r \"../../../../../Nu/Nu/bin/" + Constants.Engine.BuildName + "/net10.0/Nu.dll\""]
+                         "#r \"../../../../../Nu/Nu.Pipe/bin/" + Constants.Engine.BuildName + "/" + Constants.Engine.TargetFramework + "/Nu.Pipe.dll\""
+                         "#r \"../../../../../Nu/Nu.Spine/bin/" + Constants.Engine.BuildName + "/" + Constants.Engine.TargetFramework + "/Nu.Spine.dll\""
+                         "#r \"../../../../../Nu/Nu/bin/" + Constants.Engine.BuildName + "/" + Constants.Engine.TargetFramework + "/Nu.dll\""]
                     let fsprojFsFilePaths =
                         fsprojFileLines
                         |> Array.map (fun line -> line.Trim ())
@@ -3600,7 +3621,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
             ImGui.Separator ()
             let projectsDir = PathF.GetFullPath (programDir + "/../../../../../Projects")
             let newProjectDir = PathF.GetFullPath (projectsDir + "/" + NewProjectName)
-            let newProjectDllPath = newProjectDir + "/bin/" + Constants.Gaia.BuildName + "/net10.0/" + NewProjectName + ".dll"
+            let newProjectDllPath = newProjectDir + "/bin/" + Constants.Gaia.BuildName + "/" + Constants.Engine.TargetFramework + "/" + NewProjectName + ".dll"
             let newFileName = NewProjectName + ".fsproj"
             let newProject = PathF.GetFullPath (newProjectDir + "/" + newFileName)
             let validName = not (String.IsNullOrWhiteSpace NewProjectName) && Array.notExists (fun char -> NewProjectName.Contains (string char)) (PathF.GetInvalidPathChars ())
@@ -4386,10 +4407,6 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                             | 4 -> (v3Up * bounds.Height * 0.5f, Quaternion.CreateFromAxisAngle (v3Right, MathF.PI_OVER_2), v3 bounds.Width bounds.Depth 0.01f) // top face
                             | _ -> failwithumf ()
                         let position = bounds.Center + translation
-                        let sort =
-                            let faceDistance = world.Eye3dCenter.Distance position
-                            let centerDistance = world.Eye3dCenter.Distance bounds.Center
-                            if faceDistance < centerDistance then Single.MaxValue else Single.MinValue
                         let mutable boundsMatrix = Matrix4x4.CreateAffine (position, rotation, scale)
                         World.enqueueRenderMessage3d
                             (RenderStaticModel
@@ -4399,9 +4416,9 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                                   InsetOpt = None
                                   MaterialProperties = { MaterialProperties.defaultProperties with SpecularScalarOpt = ValueSome 0.0f }
                                   StaticModel = Assets.Default.HighlightModel
-                                  Clipped = false // not needed when forward-rendered
+                                  Clipped = true
                                   DepthTest = LessThanOrEqualTest
-                                  RenderType = ForwardRenderType (0.0f, sort)
+                                  RenderType = DeferredRenderType
                                   RenderPass = NormalPass })
                             world
             | Some _ | None -> ()
@@ -4449,6 +4466,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
     let private runWithCleanUp gaiaState targetDir_ screen world =
         OpenProjectImperativeExecution <- gaiaState.ProjectImperativeExecution
         CloseProjectImperativeExecution <- gaiaState.ProjectImperativeExecution
+        OverlayMode <- gaiaState.OverlayMode
         Snaps2dSelected <- gaiaState.Snaps2dSelected
         Snaps2d <- gaiaState.Snaps2d
         Snaps3d <- gaiaState.Snaps3d
