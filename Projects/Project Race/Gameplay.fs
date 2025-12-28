@@ -86,7 +86,7 @@ type GameplayDispatcher () =
 
             // declare player car
             World.doEntityFromFile "PlayerCar" "Assets/Gameplay/Cars/Sedan/Sedan.nuentity"
-                [if initializing then Entity.VehicleProperties @= makeVehicleProperties ()]
+                [Entity.VehicleProperties |= makeVehicleProperties ()]
                 world
             let playerCar = world.DeclaredEntity
             let playerCarBodyId = playerCar.GetBodyId world
