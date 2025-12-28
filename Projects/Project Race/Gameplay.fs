@@ -84,10 +84,8 @@ type GameplayDispatcher () =
             // begin scene declaration
             World.beginGroupFromFile "Scene" "Assets/Gameplay/Scene.nugroup" [] world
 
-            // declare player car
-            World.doEntityFromFile "PlayerCar" "Assets/Gameplay/Cars/Sedan/Sedan.nuentity"
-                [Entity.VehicleProperties |= makeVehicleProperties ()]
-                world
+            // configure player car manually due to: https://github.com/bryanedds/Nu/issues/1266
+            World.doEntity Simulants.GameplayPlayerCar.Name [Entity.VehicleProperties |= makeVehicleProperties ()] world
             let playerCar = world.DeclaredEntity
             let playerCarBodyId = playerCar.GetBodyId world
 
