@@ -9,8 +9,8 @@ open TerraFirma
 type GameplayState =
     | Playing
     | Quit
-
-// this extends the Screen API to expose the Gameplay model as well as the Quit event.
+    
+// this extends the Screen API to expose the GameplayState and Score properties.
 [<AutoOpen>]
 module GameplayExtensions =
     type Screen with
@@ -50,7 +50,8 @@ type GameplayDispatcher () =
             if selecting then World.defer (World.synchronizeNav3d false (Some sceneNavFilePath) screen) screen world
 
             // collect characters for processing
-            let characters = World.getEntitiesAs<CharacterDispatcher> Simulants.GameplayScene world
+            let characters =
+                World.getEntitiesAs<CharacterDispatcher> Simulants.GameplayScene world
 
             // process character attacks
             for character in characters do

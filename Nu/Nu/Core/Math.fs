@@ -171,6 +171,20 @@ module Vector3 =
             let e23 = this.Y * that.Z - this.Z * that.Y
             Vector3 (e12, e13, e23)
 
+        /// Convert vector components from degrees to radians.
+        member this.ToDegrees () =
+            Vector3
+                (this.X.ToDegrees (),
+                 this.Y.ToDegrees (),
+                 this.Z.ToDegrees ())
+
+        /// Convert vector components from radians to degrees.
+        member this.ToRadians () =
+            Vector3
+                (this.X.ToRadians (),
+                 this.Y.ToRadians (),
+                 this.Z.ToRadians ())
+
         /// Compute power of vector components.
         static member Pow (a : Vector3, b : Vector3) =
             Vector3
@@ -186,33 +200,33 @@ module Vector3 =
                  a.Z % b.Z)
 
         /// Project a vector onto a plane.
-        static member Project (v : Vector3, p : Plane3) =
+        static member Project (v : Vector3, p : Plane) =
             let mutable dc = Unchecked.defaultof<_>
             p.DotCoordinate (&v, &dc)
             v - dc * p.Normal
 
         /// Reflect a vector on a plane.
-        static member Reflect (v : Vector3, p : Plane3) =
+        static member Reflect (v : Vector3, p : Plane) =
             let mutable dc = Unchecked.defaultof<_>
             p.DotCoordinate (&v, &dc)
             v - 2.0f * dc * p.Normal
 
         /// Compute distance of a vector from the nearest point on a plane.
-        static member Distance (v : Vector3, p : Plane3) =
+        static member Distance (v : Vector3, p : Plane) =
             let mutable dc = Unchecked.defaultof<_>
             p.DotCoordinate (&v, &dc)
             let distance = dc + p.D
             abs (distance / p.Normal.Magnitude)
 
         /// Compute offset from a vector to the nearest point on a plane.
-        static member ToPlane (v : Vector3, p : Plane3) =
+        static member ToPlane (v : Vector3, p : Plane) =
             let mutable dc = Unchecked.defaultof<_>
             p.DotCoordinate (&v, &dc)
             let distance = dc + p.D
             -distance * p.Normal
 
         /// Compute offset to a vector from the nearest point on a plane.
-        static member inline FromPlane (v : Vector3, p : Plane3) =
+        static member inline FromPlane (v : Vector3, p : Plane) =
             -Vector3.ToPlane (v, p)
 
         /// Compute the wedge product of two vectors.
@@ -1489,14 +1503,14 @@ module Ray3 =
 
     let inline ray3 (origin : Vector3) (direction : Vector3) = Ray3 (origin, direction)
 
-// TODO: create symbolic converter for Plane3.
+// TODO: create symbolic converter for Plane.
 [<AutoOpen>]
-module Plane3 =
+module Plane =
 
-    let inline plane3 (pointOnPlane : Vector3) (normal : Vector3) = Plane3 (pointOnPlane, normal)
-    let inline plane3Equation (normal : Vector3) (d : single) = Plane3 (normal, d)
+    let inline plane3 (pointOnPlane : Vector3) (normal : Vector3) = Plane (pointOnPlane, normal)
+    let inline plane3Equation (normal : Vector3) (d : single) = Plane (normal, d)
 
-    type Plane3 with
+    type Plane with
 
         /// Attempt to find the intersection of the given ray with the plane.
         member this.Intersection (ray : Ray3) = ray.Intersection this
@@ -1526,13 +1540,17 @@ type [<Struct>] Affine =
             Affine.Identity
         else Affine.make translation rotation scale
 
+    /// Create from a translation and rotation value (lossless).
+    static member makePose translation rotation =
+        Affine.make translation rotation v3One
+
     /// Create from a translation value (lossless).
     static member makeTranslation translation =
         Affine.make translation quatIdentity v3One
 
     /// Create from a rotation value (lossless).
-    static member makeRotation translation =
-        Affine.make v3Zero translation v3One
+    static member makeRotation rotation =
+        Affine.make v3Zero rotation v3One
 
     /// Create from a scale value (lossless).
     static member makeScale scale =
@@ -1580,6 +1598,17 @@ module OrderedDictionary =
             let kvp = enr.Current
             state <- folder.Invoke (state, kvp.Key, kvp.Value)
         state
+
+/// The result of an intersection-detecting operation.
+type [<Struct>] Intersection =
+    | Hit of single
+    | Miss
+
+    /// Convert from nullable intersection value.
+    static member ofNullable (intersection : single Nullable) =
+        if intersection.HasValue
+        then Hit intersection.Value
+        else Miss
 
 /// The flipness of an image.
 type [<Struct>] Flip =
@@ -1780,26 +1809,28 @@ module Math =
             Initialized <- true
 
     /// Convert radians to degrees.
-    let RadiansToDegrees (radians : single) =
+    let inline RadiansToDegreesF (radians : single) =
+        radians.ToDegrees ()
+
+    /// Convert radians to degrees.
+    let inline RadiansToDegrees (radians : double) =
         radians.ToDegrees ()
 
     /// Convert radians to degrees in 3d.
-    let RadiansToDegrees3d (radians : Vector3) =
-        v3
-            (RadiansToDegrees radians.X)
-            (RadiansToDegrees radians.Y)
-            (RadiansToDegrees radians.Z)
+    let inline RadiansToDegrees3d (radians : Vector3) =
+        radians.ToDegrees ()
 
     /// Convert degrees to radians.
-    let DegreesToRadians (degrees : single) =
+    let inline DegreesToRadiansF (degrees : single) =
+        degrees.ToRadians ()
+
+    /// Convert degrees to radians.
+    let inline DegreesToRadians (degrees : double) =
         degrees.ToRadians ()
 
     /// Convert degrees to radians in 3d.
-    let DegreesToRadians3d (degrees : Vector3) =
-        v3
-            (DegreesToRadians degrees.X)
-            (DegreesToRadians degrees.Y)
-            (DegreesToRadians degrees.Z)
+    let inline DegreesToRadians3d (degrees : Vector3) =
+        degrees.ToRadians ()
 
     /// Snap an int value to an offset.
     let SnapI (offset, value : int) =
@@ -1814,20 +1845,30 @@ module Math =
     let SnapF (offset : single, value : single) =
         single (SnapI (int (round (offset * 100.0f)), int (round (value * 100.0f)))) / 100.0f
 
+    /// Snap a double value to an offset.
+    /// Has a minimum granularity of 0.01.
+    let Snap (offset : double, value : double) =
+        double (SnapI (int (round (offset * 100.0)), int (round (value * 100.0)))) / 100.0
+
     /// Snap a Vector3 value to an offset.
-    /// Has a minimum granularity of 0.001f.
-    let SnapF3d (offset, v3 : Vector3) =
+    /// Has a minimum granularity of 0.01f.
+    let Snap3d (offset, v3 : Vector3) =
         Vector3 (SnapF (offset, v3.X), SnapF (offset, v3.Y), SnapF (offset, v3.Z))
 
     /// Snap a degree value to an offset.
     /// Has a minimum granularity of 1.0f.
-    let SnapDegree (offset : single, value : single) =
+    let SnapDegreeF (offset : single, value : single) =
         single (SnapI (int (round offset), int (round value)))
+
+    /// Snap a degree value to an offset.
+    /// Has a minimum granularity of 1.0.
+    let SnapDegree (offset : single, value : double) =
+        double (SnapI (int (round offset), int (round value)))
 
     /// Snap a degree value to an offset.
     /// Has a minimum granularity of 1.0f.
     let SnapDegree3d (offset, v3 : Vector3) =
-        Vector3 (SnapDegree (offset, v3.X), SnapDegree (offset, v3.Y), SnapDegree (offset, v3.Z))
+        Vector3 (SnapDegreeF (offset, v3.X), SnapDegreeF (offset, v3.Y), SnapDegreeF (offset, v3.Z))
 
     /// Find the union of a line segment and a frustum if one exists.
     /// NOTE: there is a bug in here (https://github.com/bryanedds/Nu/issues/570) that keeps this from being usable on long segments.
@@ -1876,3 +1917,30 @@ module Math =
         elif frustum.Contains ((start + stop) * 0.5f) <> ContainmentType.Disjoint then
             [|segment|]
         else [||]
+
+[<AutoOpen>]
+module MathOperators =
+
+    /// Convert degrees to radians.
+    let inline degToRadF (degrees : single) =
+        degrees.ToRadians ()
+
+    /// Convert degrees to radians.
+    let inline degToRad (degrees : double) =
+        degrees.ToRadians ()
+
+    /// Convert degrees to radians in 3d.
+    let inline degToRad3d (degrees : Vector3) =
+        degrees.ToRadians ()
+
+    /// Convert radians to degrees.
+    let inline radToDegF (radians : single) =
+        radians.ToDegrees ()
+
+    /// Convert radians to degrees.
+    let inline radToDeg (radians : double) =
+        radians.ToDegrees ()
+
+    /// Convert radians to degrees in 3d.
+    let inline radToDeg3d (radians : Vector3) =
+        radians.ToDegrees ()
