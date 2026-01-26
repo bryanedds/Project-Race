@@ -21,4 +21,3 @@ module Simulants =
     let Gameplay = Game / "Gameplay"
     let GameplayScene = Gameplay / "Scene"
     let GameplayPlayerCar = GameplayScene / "PlayerCar"
-    let GameplaySun = GameplayScene / "Sun"
