@@ -1618,7 +1618,7 @@ module WorldModule2 =
                 let groups = match screenOpt with Some screen -> World.getGroups screen world | None -> Seq.empty
                 let groupsInvisible =
                     if world.Accompanied
-                    then hashSetPlus HashIdentity.Structural (Seq.filter (fun (group : Group) -> not (group.GetVisible world)) groups)
+                    then hashSetPlus HashIdentity.Structural (Seq.filter (fun (group : Group) -> not (group.GetEditing world)) groups)
                     else hashSetPlus HashIdentity.Structural []
                 match renderPass with
                 | LightMapPass (_, lightMapBounds) ->
@@ -1746,12 +1746,13 @@ module WorldModule2 =
                         if shadowTexturesCount < Constants.Render.ShadowTexturesMax then
 
                             // compute cull frustum
-                            let shadowOrigin = light.GetPosition world
                             let shadowRotation = light.GetRotation world
+                            let shadowCutoff = light.GetLightCutoff world
+                            let shadowOrigin = Light3dFacetModule.getDirectionalLightOrigin shadowRotation shadowCutoff world
                             let shadowForward = shadowRotation.Down
                             let shadowUp = shadowForward.OrthonormalUp
                             let shadowNearDistance = Constants.Render.NearPlaneDistanceInterior
-                            let shadowFarDistance = max (light.GetLightCutoff world) (shadowNearDistance * 2.0f)
+                            let shadowFarDistance = max shadowCutoff (shadowNearDistance * 2.0f)
                             let cullView = Matrix4x4.CreateLookAt (shadowOrigin, shadowOrigin + shadowForward, shadowUp)
                             let cullProjection =
                                 Matrix4x4.CreateOrthographic
@@ -1772,12 +1773,14 @@ module WorldModule2 =
 
                             // compute shadow info
                             let lightId = light.GetId world
-                            let shadowOrigin = light.GetPosition world
+                            let shadowRotation = light.GetRotation world
+                            let shadowCutoff = light.GetLightCutoff world
+                            let shadowOrigin = Light3dFacetModule.getCascadedLightOrigin shadowRotation shadowCutoff world
                             let shadowRotation = light.GetRotation world
                             let shadowForward = shadowRotation.Down
                             let shadowUp = shadowForward.OrthonormalUp
                             let shadowNearDistance = Constants.Render.NearPlaneDistanceInterior
-                            let shadowFarDistance = max (light.GetLightCutoff world) (shadowNearDistance * 2.0f)
+                            let shadowFarDistance = max shadowCutoff (shadowNearDistance * 2.0f)
 
                             // compute eye values
                             let eyeRotation = World.getEye3dRotation world
@@ -1809,7 +1812,7 @@ module WorldModule2 =
                                 let groups = match screenOpt with Some screen -> World.getGroups screen world | None -> Seq.empty
                                 let groupsInvisible =
                                     if world.Accompanied
-                                    then hashSetPlus HashIdentity.Structural (Seq.filter (fun (group : Group) -> not (group.GetVisible world)) groups)
+                                    then hashSetPlus HashIdentity.Structural (Seq.filter (fun (group : Group) -> not (group.GetEditing world)) groups)
                                     else hashSetPlus HashIdentity.Structural []
                                 let shadowInterior = LightType.shouldShadowInterior CascadedLight
                                 World.getElements3dInViewFrustum shadowInterior true cullFrustum HashSet3dNormalCached world

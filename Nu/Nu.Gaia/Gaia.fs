@@ -708,12 +708,18 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
 
     let private getPickCandidates2d world =
         let entities = World.getEntities2dInView (HashSet (QuadelementEqualityComparer ())) world
-        let entitiesInGroup = entities |> Seq.filter (fun entity -> entity.Group = SelectedGroup && entity.GetVisible world) |> Seq.toArray
+        let entitiesInGroup =
+            entities
+            |> Seq.filter (fun entity -> entity.Group = SelectedGroup && entity.Group.GetEditing world && entity.GetVisible world)
+            |> Seq.toArray
         entitiesInGroup
 
     let private getPickCandidates3d world =
         let entities = World.getEntities3dInView (HashSet (OctelementEqualityComparer ())) world
-        let entitiesInGroup = entities |> Seq.filter (fun entity -> entity.Group = SelectedGroup && entity.GetVisible world) |> Seq.toArray
+        let entitiesInGroup =
+            entities
+            |> Seq.filter (fun entity -> entity.Group = SelectedGroup && entity.Group.GetEditing world && entity.GetVisible world)
+            |> Seq.toArray
         entitiesInGroup
 
     let private tryMousePick mousePosition world =
@@ -1233,15 +1239,16 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                     let fsprojFilePath = fsprojFilePaths.[0]
                     Log.info ("Inspecting code for F# project '" + fsprojFilePath + "'...")
                     let fsprojFileLines = // TODO: P1: consider loading hard-coded references from Nu.fsproj.
-                        [|"""<PackageReference Include="Box2D.NET" Version="3.1.1.557" />"""
+                        [|"""<PackageReference Include="Aether.Physics2D" Version="2.2.0" />"""
+                          """<PackageReference Include="Box2D.NET" Version="3.1.1.557" />"""
                           """<PackageReference Include="BCnEncoder.Net" Version="2.2.1" />"""
                           """<PackageReference Include="DotRecast.Recast.Toolset" Version="2026.1.1" />"""
-                          """<PackageReference Include="JoltPhysicsSharp" Version="2.18.4" />"""
-                          """<PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.10.1" />"""
-                          """<PackageReference Include="Pfim" Version="0.11.3" />"""
-                          """<PackageReference Include="Prime" Version="11.1.5" />"""
-                          """<PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.5" />"""
-                          """<PackageReference Include="System.Drawing.Common" Version="9.0.5" />"""
+                          """<PackageReference Include="JoltPhysicsSharp" Version="2.19.5" />"""
+                          """<PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.10.2" />"""
+                          """<PackageReference Include="Pfim" Version="0.11.4" />"""
+                          """<PackageReference Include="Prime" Version="11.2.0" />"""
+                          """<PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.1" />"""
+                          """<PackageReference Include="System.Drawing.Common" Version="10.0.1" />"""
                           """<PackageReference Include="Twizzle.ImGui-Bundle.NET" Version="1.91.5.2" />"""|]
                         |> Array.append (File.ReadAllLines fsprojFilePath)
                     let fsprojNugetPaths =
@@ -4338,7 +4345,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
             let entities = World.getLightProbes3dInViewBox lightBox (HashSet ()) world
             let lightProbeModels =
                 entities
-                |> Seq.filter (fun entity -> entity.Group = SelectedGroup && eyeFrustum.Intersects (entity.GetBounds world))
+                |> Seq.filter (fun entity -> entity.Group = SelectedGroup && entity.Group.GetEditing world && eyeFrustum.Intersects (entity.GetBounds world))
                 |> Seq.map (fun light -> (light.GetAffineMatrix world, false, Omnipresent, None, MaterialProperties.defaultProperties))
                 |> SList.ofSeq
             if SList.notEmpty lightProbeModels then
@@ -4356,7 +4363,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
             let entities = World.getLights3dInViewBox lightBox (HashSet ()) world
             let lightModels =
                 entities
-                |> Seq.filter (fun entity -> entity.Group = SelectedGroup && eyeFrustum.Intersects (entity.GetBounds world))
+                |> Seq.filter (fun entity -> entity.Group = SelectedGroup && entity.Group.GetEditing world && eyeFrustum.Intersects (entity.GetBounds world))
                 |> Seq.map (fun light -> (light.GetAffineMatrix world, false, Omnipresent, None, MaterialProperties.defaultProperties))
                 |> SList.ofSeq
             if SList.notEmpty lightModels then
