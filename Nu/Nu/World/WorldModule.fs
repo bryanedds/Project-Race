@@ -230,6 +230,14 @@ module WorldModule =
         static member getDateTime world =
             AmbientState.getDateTime world.AmbientState
 
+        /// Get the timers.
+        static member getTimers world =
+            AmbientState.getTimers world.AmbientState
+
+        /// Get the current edit context, if any.
+        static member getEditContextOpt (world : World) =
+            world.EditContextOpt
+
         /// Get the current ImSim context.
         static member getContextImSim (world : World) =
             world.ContextImSim
@@ -938,7 +946,7 @@ module WorldModule =
         static member internal imGuiPostProcess (world : World) =
             world.WorldExtension.Plugin.ImGuiPostProcess world
 
-    type World with // Edit Deferrals
+    type World with // EditDeferrals
 
         /// Schedule a property replacement operation on a simulant for the appropriate ImGui phase.
         static member deferReplaceProperty op simulant world =

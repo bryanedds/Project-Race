@@ -808,19 +808,6 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                             scan fieldValue
         scan root
 
-    let private makeContext focusPropertyOpt unfocusPropertyOpt =
-        { Snapshot = snapshot
-          FocusProperty = match focusPropertyOpt with Some focus -> focus | None -> fun () -> ()
-          UnfocusProperty = match unfocusPropertyOpt with Some unfocus -> unfocus | None -> fun () -> ()
-          SearchAssetViewer = fun () -> searchAssetViewer ()
-          DragDropPayloadOpt = DragDropPayloadOpt
-          SnapDrag = SnapDrag
-          SelectedScreen = SelectedScreen
-          SelectedGroup = SelectedGroup
-          SelectedEntityOpt = SelectedEntityOpt
-          ToSymbolMemo = ToSymbolMemo
-          OfSymbolMemo = OfSymbolMemo }
-
     (* Nu Event Handling Functions *)
 
     let private handleNuMouseButton (_ : Event<MouseButtonData, Game>) world =
@@ -1246,7 +1233,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                           """<PackageReference Include="JoltPhysicsSharp" Version="2.19.5" />"""
                           """<PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.10.2" />"""
                           """<PackageReference Include="Pfim" Version="0.11.4" />"""
-                          """<PackageReference Include="Prime" Version="11.2.0" />"""
+                          """<PackageReference Include="Prime" Version="11.4.0" />"""
                           """<PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.1" />"""
                           """<PackageReference Include="System.Drawing.Common" Version="10.0.1" />"""
                           """<PackageReference Include="Twizzle.ImGui-Bundle.NET" Version="1.91.5.2" />"""|]
@@ -1781,6 +1768,20 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1280,720 Split=
                         selectEntityOpt None world
 
     (* Top-Level Functions *)
+
+    /// Make an editor context.
+    let makeContext focusPropertyOpt unfocusPropertyOpt =
+        { Snapshot = snapshot
+          FocusProperty = match focusPropertyOpt with Some focus -> focus | None -> fun () -> ()
+          UnfocusProperty = match unfocusPropertyOpt with Some unfocus -> unfocus | None -> fun () -> ()
+          SearchAssetViewer = fun () -> searchAssetViewer ()
+          DragDropPayloadOpt = DragDropPayloadOpt
+          SnapDrag = SnapDrag
+          SelectedScreen = SelectedScreen
+          SelectedGroup = SelectedGroup
+          SelectedEntityOpt = SelectedEntityOpt
+          ToSymbolMemo = ToSymbolMemo
+          OfSymbolMemo = OfSymbolMemo }
 
     // TODO: split this function up or at least apply intention blocks?
     let private imGuiEntity branch filtering (entity : Entity) (world : World) =
