@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -21,13 +24,13 @@ module Content =
     // NOTE: extracted from Content.synchronizeEventHandlers to shorten stack trace.
     let [<DebuggerHidden>] private signalHandler signalObj origin =
         fun (_ : Event) world ->
-            WorldModule.signal signalObj origin world
+            WorldModuleInternal.signal signalObj origin world
             Cascade
 
     // NOTE: extracted from Content.synchronizeEventHandlers to shorten stack trace.
     let [<DebuggerHidden>] private signalHandlerHandler handler origin =
         fun event world ->
-            WorldModule.signal (handler event) origin world
+            WorldModuleInternal.signal (handler event) origin world
             Cascade
 
     let
@@ -217,7 +220,7 @@ module Content =
                     if not (entity.GetExists world) || entity.GetDestroying world then
                         let mountOpt = match entityContent.MountOptOpt with ValueSome mountOpt -> mountOpt | ValueNone -> Some Address.parent
                         World.createEntity7 false entityContent.EntityDispatcherName mountOpt DefaultOverlay (Some entity.Surnames) entity.Group world |> ignore<Entity>
-                        World.setEntityProtected true entity world |> ignore<bool>
+                        World.setEntityProtection DeclarativeProtection entity world |> ignore<bool>
                     synchronizeEntity true reinitializing EntityContent.empty entityContent origin entity world
             | None -> ()
 
@@ -244,7 +247,7 @@ module Content =
                         | None ->
                             let mountOpt = match entityContent.MountOptOpt with ValueSome mountOpt -> mountOpt | ValueNone -> Some Address.parent
                             World.createEntity7 false entityContent.EntityDispatcherName mountOpt DefaultOverlay (Some entity.Surnames) entity.Group world |> ignore<Entity>
-                        World.setEntityProtected true entity world |> ignore<bool>
+                        World.setEntityProtection DeclarativeProtection entity world |> ignore<bool>
                     synchronizeEntity true reinitializing EntityContent.empty entityContent origin entity world
             | None -> ()
 
@@ -284,7 +287,7 @@ module Content =
                         match groupContent.GroupFilePathOpt with
                         | Some groupFilePath -> World.readGroupFromFile groupFilePath (Some group.Name) screen world |> ignore<Group>
                         | None -> World.createGroup5 false groupContent.GroupDispatcherName (Some group.Name) group.Screen world |> ignore<Group>
-                        World.setGroupProtected true group world |> ignore<bool>
+                        World.setGroupProtection DeclarativeProtection group world |> ignore<bool>
                     synchronizeGroup true reinitializing GroupContent.empty groupContent origin group world
             | None -> ()
 
@@ -306,7 +309,7 @@ module Content =
                 for (screen : Screen, screenContent : ScreenContent) in screensAdded do
                     if not (screen.GetExists world) || screen.GetDestroying world then
                         World.createScreen4 screenContent.ScreenDispatcherName (Some screen.Name) world |> ignore<Screen>
-                        World.setScreenProtected true screen world |> ignore<bool>
+                        World.setScreenProtection DeclarativeProtection screen world |> ignore<bool>
                     World.applyScreenBehavior setScreenSlide screenContent.ScreenBehavior screen world
                     synchronizeScreen true reinitializing ScreenContent.empty screenContent origin screen world
                 content.InitialScreenNameOpt |> Option.map (fun name -> Nu.Game.Handle / name)
@@ -449,28 +452,28 @@ module Content =
     let cursor entityName definitions content = composite<CursorDispatcher> entityName definitions content
 
     /// <summary>
-    /// Describe a 2d block with the given definitions.
-    /// See <see cref="Block2dDispatcher"/>.
+    /// Describe a 2d block body with the given definitions.
+    /// See <see cref="BlockBody2dDispatcher"/>.
     /// </summary>
-    let block2d entityName definitions = entity<Block2dDispatcher> entityName definitions
+    let blockBody2d entityName definitions = entity<BlockBody2dDispatcher> entityName definitions
 
     /// <summary>
-    /// Describe a 2d box with the given definitions.
-    /// See <see cref="Box2dDispatcher"/>.
+    /// Describe a 2d box body with the given definitions.
+    /// See <see cref="BoxBody2dDispatcher"/>.
     /// </summary>
-    let box2d entityName definitions = entity<Box2dDispatcher> entityName definitions
+    let boxBody2d entityName definitions = entity<BoxBody2dDispatcher> entityName definitions
 
     /// <summary>
-    /// Describe a 2d sphere with the given definitions.
-    /// See <see cref="Sphere2dDispatcher"/>.
+    /// Describe a 2d orb body with the given definitions.
+    /// See <see cref="OrbBody2dDispatcher"/>.
     /// </summary>
-    let sphere2d entityName definitions = entity<Sphere2dDispatcher> entityName definitions
+    let orbBody2d entityName definitions = entity<OrbBody2dDispatcher> entityName definitions
 
     /// <summary>
-    /// Describe a 2d ball with the given definitions.
-    /// See <see cref="Ball2dDispatcher"/>.
+    /// Describe a 2d ball body with the given definitions.
+    /// See <see cref="BallBody2dDispatcher"/>.
     /// </summary>
-    let ball2d entityName definitions = entity<Ball2dDispatcher> entityName definitions
+    let ballBody2d entityName definitions = entity<BallBody2dDispatcher> entityName definitions
 
     /// <summary>
     /// Describe a 2d character with the given definitions.
@@ -533,28 +536,28 @@ module Content =
     let effect3d entityName definitions = entity<Effect3dDispatcher> entityName definitions
 
     /// <summary>
-    /// Describe a 3d block with the given definitions.
-    /// See <see cref="Block3dDispatcher"/>.
+    /// Describe a 3d block body with the given definitions.
+    /// See <see cref="BlockBody3dDispatcher"/>.
     /// </summary>
-    let block3d entityName definitions = entity<Block3dDispatcher> entityName definitions
+    let blockBody3d entityName definitions = entity<BlockBody3dDispatcher> entityName definitions
 
     /// <summary>
-    /// Describe a 3d box with the given definitions.
-    /// See <see cref="Box3dDispatcher"/>.
+    /// Describe a 3d box body with the given definitions.
+    /// See <see cref="BoxBody3dDispatcher"/>.
     /// </summary>
-    let box3d entityName definitions = entity<Box3dDispatcher> entityName definitions
+    let boxBody3d entityName definitions = entity<BoxBody3dDispatcher> entityName definitions
 
     /// <summary>
-    /// Describe a 3d sphere with the given definitions.
-    /// See <see cref="Sphere3dDispatcher"/>.
+    /// Describe a 3d orb body with the given definitions.
+    /// See <see cref="OrbBody3dDispatcher"/>.
     /// </summary>
-    let sphere3d entityName definitions = entity<Sphere3dDispatcher> entityName definitions
+    let orbBody3d entityName definitions = entity<OrbBody3dDispatcher> entityName definitions
 
     /// <summary>
-    /// Describe a 3d ball with the given definitions.
-    /// See <see cref="Ball3dDispatcher"/>.
+    /// Describe a 3d ball body with the given definitions.
+    /// See <see cref="BallBody3dDispatcher"/>.
     /// </summary>
-    let ball3d entityName definitions = entity<Ball3dDispatcher> entityName definitions
+    let ballBody3d entityName definitions = entity<BallBody3dDispatcher> entityName definitions
 
     /// <summary>
     /// Describe a static billboard with the given definitions.
@@ -651,6 +654,12 @@ module Content =
     /// See <see cref="RigidModelHierarchyDispatcher"/>.
     /// </summary>
     let rigidModelHierarchy entityName definitions = entity<RigidModelHierarchyDispatcher> entityName definitions
+
+    /// <summary>
+    /// Describe a block map with the given definitions.
+    /// See <see cref="BlockMapDispatcher"/>.
+    /// </summary>
+    let blockMap entityName definitions = entity<BlockMapDispatcher> entityName definitions
 
     /// Describe a group with the given dispatcher type and definitions as well as its contained entities.
     let private group4<'groupDispatcher when 'groupDispatcher :> GroupDispatcher> groupName groupFilePathOpt (definitions : Group DefinitionContent seq) entities =

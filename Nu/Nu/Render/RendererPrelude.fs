@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -102,7 +105,8 @@ type [<CustomEquality; NoComparison>] RenderPass =
         | NormalPass -> that.IsNormalPass
 
     override this.GetHashCode () =
-        // OPTIMIZATION: we only hash certain parts of the render pass in order to make hashing cheaper.
+
+        // OPTIMIZATION: we hash only certain parts of the render pass in order to make hashing cheaper.
         match this with
         | LightMapPass (id, _) -> hash id
         | ShadowPass (id, indexInfoOpt, _, dynamicShadows, _, _) ->

@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -218,7 +221,7 @@ module WorldImSim =
                         match groupFilePathOpt with
                         | Some groupFilePath -> World.readGroupFromFile groupFilePath (Some name) group.Screen world |> ignore<Group>
                         | None -> World.createGroup5 true typeof<'d>.Name (Some name) group.Screen world |> ignore<Group>
-                        World.setGroupProtected true group world |> ignore<bool>
+                        World.setGroupProtection DeclarativeProtection group world |> ignore<bool>
 
                     // fin
                     true
@@ -229,8 +232,8 @@ module WorldImSim =
                     | ReinitializingArg -> initializing || Reinitializing
                     | DynamicArg -> true) && group.GetExists world then
                     group.TrySetProperty arg.ArgLens.Name { PropertyType = arg.ArgLens.Type; PropertyValue = arg.ArgValue } world |> ignore
-            if groupCreation && group.GetExists world && WorldModule.UpdatingSimulants && World.getGroupSelected group world then
-                WorldModule.tryProcessGroup true group world
+            if groupCreation && group.GetExists world && WorldModuleInternal.UpdatingSimulants && World.getGroupSelected group world then
+                WorldModuleInternal.tryProcessGroup true group world
             let result = match (World.getSimulantImSim group.GroupAddress world).Result with :? 'r as r -> r | _ -> zero
             World.mapSimulantImSim (fun simulantImSim -> { simulantImSim with Result = zero }) group.GroupAddress world
             result
@@ -249,7 +252,7 @@ module WorldImSim =
             // HACK: when group appears to exist as a placeholder created by Gaia, we destroy it so it can be made in a user-defined way.
             if  group.Name = "Scene" &&
                 group.GetExists world &&
-                Seq.isEmpty (World.getSovereignEntities group world) &&
+                Seq.isEmpty (World.getEntitiesSovereign group world) &&
                 getTypeName (group.GetDispatcher world) = nameof GroupDispatcher then
                 World.destroyGroupImmediate group world
             let groupCreation = not (group.GetExists world)
@@ -263,7 +266,7 @@ module WorldImSim =
                         let groupDescriptorStr = File.ReadAllText groupFilePath
                         let groupDescriptor = scvalue<GroupDescriptor> groupDescriptorStr
                         World.readGroup groupDescriptor (Some name) group.Screen world |> ignore<Group>
-                        World.setGroupProtected true group world |> ignore<bool>
+                        World.setGroupProtection DeclarativeProtection group world |> ignore<bool>
                     World.addSimulantImSim group.GroupAddress { SimulantInitializing = true; SimulantUtilized = true; InitializationTime = Core.getTimeStampUnique (); Result = () } world
                     true
             for arg in args do
@@ -272,8 +275,8 @@ module WorldImSim =
                     | ReinitializingArg -> initializing || Reinitializing
                     | DynamicArg -> true) && group.GetExists world then
                     group.TrySetProperty arg.ArgLens.Name { PropertyType = arg.ArgLens.Type; PropertyValue = arg.ArgValue } world |> ignore
-            if groupCreation && group.GetExists world && WorldModule.UpdatingSimulants && World.getGroupSelected group world then
-                WorldModule.tryProcessGroup true group world
+            if groupCreation && group.GetExists world && WorldModuleInternal.UpdatingSimulants && World.getGroupSelected group world then
+                WorldModuleInternal.tryProcessGroup true group world
 
         /// Begin the ImSim declaration of a group with the given arguments.
         static member beginGroupPlus<'d, 'r when 'd :> GroupDispatcher> zero init name args world =
@@ -337,7 +340,7 @@ module WorldImSim =
                         let entityDescriptorStr = File.ReadAllText entityFilePath
                         let entityDescriptor = scvalue<EntityDescriptor> entityDescriptorStr
                         World.readEntity false true entityDescriptor (Some name) entity.Parent world |> ignore<Entity>
-                        World.setEntityProtected true entity world |> ignore<bool>
+                        World.setEntityProtection DeclarativeProtection entity world |> ignore<bool>
                     World.addSimulantImSim entity.EntityAddress { SimulantInitializing = true; SimulantUtilized = true; InitializationTime = Core.getTimeStampUnique (); Result = () } world
                     true
 
@@ -357,8 +360,8 @@ module WorldImSim =
                 entity.SetMountOpt (Some Address.parent) world
             
             // process entity when appropriate
-            if entityCreation && entity.GetExists world && WorldModule.UpdatingSimulants && World.getEntitySelected entity world then
-                WorldModule.tryProcessEntity true entity world
+            if entityCreation && entity.GetExists world && WorldModuleInternal.UpdatingSimulants && World.getEntitySelected entity world then
+                WorldModuleInternal.tryProcessEntity true entity world
 
         /// Begin the ImSim declaration of an entity with the given arguments.
         static member beginEntityPlus<'d, 'r when 'd :> EntityDispatcher> (zero : 'r) init name (args : Entity ArgImSim seq) (world : World) : 'r =
@@ -397,7 +400,7 @@ module WorldImSim =
                     if entityCreation then
                         let mountOpt = match mountOptOpt with ValueSome mountOpt -> mountOpt | ValueNone -> Some Address.parent
                         World.createEntity7 true typeof<'d>.Name mountOpt DefaultOverlay (Some entity.Surnames) entity.Group world |> ignore<Entity>
-                        World.setEntityProtected true entity world |> ignore<bool>
+                        World.setEntityProtection DeclarativeProtection entity world |> ignore<bool>
 
                     // fin
                     true
@@ -415,8 +418,8 @@ module WorldImSim =
                 entity.SetMountOpt (Some Address.parent) world
 
             // process entity when appropriate
-            if entityCreation && entity.GetExists world && WorldModule.UpdatingSimulants && World.getEntitySelected entity world then
-                WorldModule.tryProcessEntity true entity world
+            if entityCreation && entity.GetExists world && WorldModuleInternal.UpdatingSimulants && World.getEntitySelected entity world then
+                WorldModuleInternal.tryProcessEntity true entity world
 
             // update result
             let result = match (World.getSimulantImSim entity.EntityAddress world).Result with :? 'r as r -> r | _ -> zero
@@ -589,35 +592,35 @@ module WorldImSim =
         static member doCursor name args world = World.doEntity<CursorDispatcher> name args world
 
         /// <summary>
-        /// ImSim declare a 2d block with the given arguments.
-        /// See <see cref="Block2dDispatcher" />.
+        /// ImSim declare a 2d block body with the given arguments.
+        /// See <see cref="BlockBody2dDispatcher" />.
         /// </summary>
         static member doBlock2d name args world =
-            let results = World.doEntityPlus<Block2dDispatcher, _> FQueue.empty World.initBodyResult name args world
+            let results = World.doEntityPlus<BlockBody2dDispatcher, _> FQueue.empty World.initBodyResult name args world
             (world.DeclaredEntity.GetBodyId world, results)
 
         /// <summary>
-        /// ImSim declare a 2d box with the given arguments.
-        /// See <see cref="Box2dDispatcher" />.
+        /// ImSim declare a 2d box body with the given arguments.
+        /// See <see cref="BoxBody2dDispatcher" />.
         /// </summary>
         static member doBox2d name args world =
-            let results = World.doEntityPlus<Box2dDispatcher, _> FQueue.empty World.initBodyResult name args world
+            let results = World.doEntityPlus<BoxBody2dDispatcher, _> FQueue.empty World.initBodyResult name args world
             (world.DeclaredEntity.GetBodyId world, results)
 
         /// <summary>
-        /// ImSim declare a 2d sphere with the given arguments.
-        /// See <see cref="Sphere2dDispatcher" />.
+        /// ImSim declare a 2d orb body with the given arguments.
+        /// See <see cref="OrbBody2dDispatcher" />.
         /// </summary>
         static member doSphere2d name args world =
-            let results = World.doEntityPlus<Sphere2dDispatcher, _> FQueue.empty World.initBodyResult name args world
+            let results = World.doEntityPlus<OrbBody2dDispatcher, _> FQueue.empty World.initBodyResult name args world
             (world.DeclaredEntity.GetBodyId world, results)
 
         /// <summary>
-        /// ImSim declare a 2d ball with the given arguments.
-        /// See <see cref="Ball2dDispatcher" />.
+        /// ImSim declare a 2d ball body with the given arguments.
+        /// See <see cref="BallBody2dDispatcher" />.
         /// </summary>
         static member doBall2d name args world =
-            let results = World.doEntityPlus<Ball2dDispatcher, _> FQueue.empty World.initBodyResult name args world
+            let results = World.doEntityPlus<BallBody2dDispatcher, _> FQueue.empty World.initBodyResult name args world
             (world.DeclaredEntity.GetBodyId world, results)
 
         /// <summary>
@@ -690,35 +693,35 @@ module WorldImSim =
         static member doEffect3d name args world = World.doEntity<Effect3dDispatcher> name args world
 
         /// <summary>
-        /// ImSim declare a 3d block with the given arguments.
-        /// See <see cref="Block3dDispatcher" />.
+        /// ImSim declare a 3d block body with the given arguments.
+        /// See <see cref="BlockBody3dDispatcher" />.
         /// </summary>
-        static member doBlock3d name args world =
-            let results = World.doEntityPlus<Block3dDispatcher, _> FQueue.empty World.initBodyResult name args world
+        static member doBlockBody3d name args world =
+            let results = World.doEntityPlus<BlockBody3dDispatcher, _> FQueue.empty World.initBodyResult name args world
             (world.DeclaredEntity.GetBodyId world, results)
 
         /// <summary>
-        /// ImSim declare a 3d box with the given arguments.
-        /// See <see cref="Box3dDispatcher" />.
+        /// ImSim declare a 3d box body with the given arguments.
+        /// See <see cref="BoxBody3dDispatcher" />.
         /// </summary>
-        static member doBox3d name args world =
-            let results = World.doEntityPlus<Box3dDispatcher, _> FQueue.empty World.initBodyResult name args world
+        static member doBoxBody3d name args world =
+            let results = World.doEntityPlus<BoxBody3dDispatcher, _> FQueue.empty World.initBodyResult name args world
             (world.DeclaredEntity.GetBodyId world, results)
 
         /// <summary>
-        /// ImSim declare a 3d sphere with the given arguments.
-        /// See <see cref="Sphere3dDispatcher" />.
+        /// ImSim declare a 3d orb body with the given arguments.
+        /// See <see cref="OrbBody3dDispatcher" />.
         /// </summary>
-        static member doSphere3d name args world =
-            let results = World.doEntityPlus<Sphere3dDispatcher, _> FQueue.empty World.initBodyResult name args world
+        static member doOrbBody3d name args world =
+            let results = World.doEntityPlus<OrbBody3dDispatcher, _> FQueue.empty World.initBodyResult name args world
             (world.DeclaredEntity.GetBodyId world, results)
 
         /// <summary>
-        /// ImSim declare a 3d ball with the given arguments.
-        /// See <see cref="Ball3dDispatcher" />.
+        /// ImSim declare a 3d ball body with the given arguments.
+        /// See <see cref="BallBody3dDispatcher" />.
         /// </summary>
-        static member doBall3d name args world =
-            let results = World.doEntityPlus<Ball3dDispatcher, _> FQueue.empty World.initBodyResult name args world
+        static member doBallBody3d name args world =
+            let results = World.doEntityPlus<BallBody3dDispatcher, _> FQueue.empty World.initBodyResult name args world
             (world.DeclaredEntity.GetBodyId world, results)
 
         /// <summary>
@@ -830,3 +833,9 @@ module WorldImSim =
         /// See <see cref="RigidModelHierarchyDispatcher" />.
         /// </summary>
         static member doRigidModelHierarchy name args world = World.doEntity<RigidModelHierarchyDispatcher> name args world
+
+        /// <summary>
+        /// ImSim declare a block map with the given arguments.
+        /// See <see cref="BlockMapDispatcher" />.
+        /// </summary>
+        static member doBlockMap name args world = World.doEntity<BlockMapDispatcher> name args world

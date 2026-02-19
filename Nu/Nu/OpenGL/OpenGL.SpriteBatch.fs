@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace OpenGL
 open System
@@ -37,7 +40,7 @@ module SpriteBatch =
         static member inline make absolute clipOpt bfs bfd beq texture =
             { Absolute = absolute; ClipOpt = clipOpt; BlendingFactorSrc = bfs; BlendingFactorDst = bfd; BlendingEquation = beq; TextureOpt = ValueSome texture }
 
-        static member defaultState =
+        static member val defaultState =
             { Absolute = false; ClipOpt = ValueNone; BlendingFactorSrc = BlendingFactor.SrcAlpha; BlendingFactorDst = BlendingFactor.OneMinusSrcAlpha; BlendingEquation = BlendEquationMode.FuncAdd; TextureOpt = ValueNone }
 
     /// The environment that contains the internal state required for batching sprites.

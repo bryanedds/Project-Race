@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -12,30 +15,34 @@ open SDL2
 open ImGuiNET
 open Prime
 
+/// Internal function definitions for the world (2/2).
+[<RequireQualifiedAccess>]
+module internal WorldModuleInternal2 =
+
+    (* Transition Values *)
+    let internal ScreenTransitionMouseLeftId = Gen.id64
+    let internal ScreenTransitionMouseMiddleId = Gen.id64
+    let internal ScreenTransitionMouseRightId = Gen.id64
+    let internal ScreenTransitionMouseX1Id = Gen.id64
+    let internal ScreenTransitionMouseX2Id = Gen.id64
+    let internal ScreenTransitionKeyboardKeyId = Gen.id64
+
+    (* Cached HashSets *)
+    let internal HashSet2dNormalCached = HashSet (QuadelementEqualityComparer ())
+    let internal HashSet3dNormalCached = HashSet (OctelementEqualityComparer ())
+    let internal HashSet3dShadowCached = HashSet (OctelementEqualityComparer ())
+
+    (* Frame Pacing *)
+    let mutable internal FramePaceIssues = 0
+    let mutable internal FramePaceChecks = 0
+
+    (* Cached ImSim Collections *)
+    let internal ImSimSimulantsToDestroy = List ()
+    let internal SimulantImSimComparer = Comparer<int64 * Simulant>.Create (fun (a, _) (b, _) -> a.CompareTo b)
+
 /// Universal function definitions for the world (2/4).
 [<AutoOpen>]
 module WorldModule2 =
-
-    (* Transition Values *)
-    let private ScreenTransitionMouseLeftId = Gen.id64
-    let private ScreenTransitionMouseMiddleId = Gen.id64
-    let private ScreenTransitionMouseRightId = Gen.id64
-    let private ScreenTransitionMouseX1Id = Gen.id64
-    let private ScreenTransitionMouseX2Id = Gen.id64
-    let private ScreenTransitionKeyboardKeyId = Gen.id64
-
-    (* Cached HashSets *)
-    let private HashSet2dNormalCached = HashSet (QuadelementEqualityComparer ())
-    let private HashSet3dNormalCached = HashSet (OctelementEqualityComparer ())
-    let private HashSet3dShadowCached = HashSet (OctelementEqualityComparer ())
-
-    (* Frame Pacing *)
-    let mutable private FramePaceIssues = 0
-    let mutable private FramePaceChecks = 0
-
-    (* Cached ImSim Collections *)
-    let private ImSimSimulantsToDestroy = List ()
-    let private SimulantImSimComparer = Comparer<int64 * Simulant>.Create (fun (a, _) (b, _) -> a.CompareTo b)
 
     type World with
 
@@ -47,7 +54,7 @@ module WorldModule2 =
 
                 // HACK: in order to avoid unintentional interaction with the ImSim hack that clears and restores
                 // advancement state ImSim contexts, we schedule the advancement change outside of the normal workflow.
-                let time = if EndFrameProcessingStarted && world.Advancing then GameTime.epsilon else GameTime.zero
+                let time = if WorldModuleInternal.EndFrameProcessingStarted && world.Advancing then GameTime.epsilon else GameTime.zero
                 World.addTasklet Nu.Game.Handle { ScheduledTime = time; ScheduledOp = World.mapAmbientState (AmbientState.setAdvancing advancing) } world
 
         /// Select the given screen without transitioning, even if another transition is taking place.
@@ -111,22 +118,22 @@ module WorldModule2 =
         static member private setScreenTransitionStatePlus (state : TransitionState) (screen : Screen) world =
             match state with
             | IncomingState _ | OutgoingState _ ->
-                World.subscribePlus ScreenTransitionMouseLeftId World.handleAsSwallow (stoa<MouseButtonData> ("Mouse/Left/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
-                World.subscribePlus ScreenTransitionMouseMiddleId World.handleAsSwallow (stoa<MouseButtonData> ("Mouse/Middle/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
-                World.subscribePlus ScreenTransitionMouseRightId World.handleAsSwallow (stoa<MouseButtonData> ("Mouse/Right/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
-                World.subscribePlus ScreenTransitionMouseX1Id World.handleAsSwallow (stoa<MouseButtonData> ("Mouse/X1/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
-                World.subscribePlus ScreenTransitionMouseX2Id World.handleAsSwallow (stoa<MouseButtonData> ("Mouse/X2/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
-                World.subscribePlus ScreenTransitionKeyboardKeyId World.handleAsSwallow (stoa<KeyboardKeyData> ("KeyboardKey/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
+                World.subscribePlus WorldModuleInternal2.ScreenTransitionMouseLeftId World.handleAsSwallow (stoa<MouseButtonData> ("Mouse/Left/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
+                World.subscribePlus WorldModuleInternal2.ScreenTransitionMouseMiddleId World.handleAsSwallow (stoa<MouseButtonData> ("Mouse/Middle/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
+                World.subscribePlus WorldModuleInternal2.ScreenTransitionMouseRightId World.handleAsSwallow (stoa<MouseButtonData> ("Mouse/Right/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
+                World.subscribePlus WorldModuleInternal2.ScreenTransitionMouseX1Id World.handleAsSwallow (stoa<MouseButtonData> ("Mouse/X1/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
+                World.subscribePlus WorldModuleInternal2.ScreenTransitionMouseX2Id World.handleAsSwallow (stoa<MouseButtonData> ("Mouse/X2/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
+                World.subscribePlus WorldModuleInternal2.ScreenTransitionKeyboardKeyId World.handleAsSwallow (stoa<KeyboardKeyData> ("KeyboardKey/" + Constants.Address.WildcardName + "/Event/Game")) Nu.Game.Handle world |> ignore
             | IdlingState _ -> ()
             screen.SetTransitionState state world
             match screen.GetTransitionState world with
             | IdlingState _ ->
-                World.unsubscribe ScreenTransitionMouseLeftId world
-                World.unsubscribe ScreenTransitionMouseMiddleId world
-                World.unsubscribe ScreenTransitionMouseRightId world
-                World.unsubscribe ScreenTransitionMouseX1Id world
-                World.unsubscribe ScreenTransitionMouseX2Id world
-                World.unsubscribe ScreenTransitionKeyboardKeyId world
+                World.unsubscribe WorldModuleInternal2.ScreenTransitionMouseLeftId world
+                World.unsubscribe WorldModuleInternal2.ScreenTransitionMouseMiddleId world
+                World.unsubscribe WorldModuleInternal2.ScreenTransitionMouseRightId world
+                World.unsubscribe WorldModuleInternal2.ScreenTransitionMouseX1Id world
+                World.unsubscribe WorldModuleInternal2.ScreenTransitionMouseX2Id world
+                World.unsubscribe WorldModuleInternal2.ScreenTransitionKeyboardKeyId world
             | IncomingState _ | OutgoingState _ -> ()
                 
         static member private updateScreenTransition3 transitionType (selectedScreen : Screen) world =
@@ -389,7 +396,7 @@ module WorldModule2 =
                         match groupFilePathOpt with
                         | Some groupFilePath -> World.readGroupFromFile groupFilePath None screen world |> ignore<Group>
                         | None -> ()
-                        World.setScreenProtected true screen world |> ignore<bool>
+                        World.setScreenProtection DeclarativeProtection screen world |> ignore<bool>
 
                     // fin
                     true
@@ -403,7 +410,7 @@ module WorldModule2 =
             if (initializing || Reinitializing) && screen.GetExists world then
                 World.applyScreenBehavior setScreenSlide behavior screen world
             if screenCreation && screen.GetExists world then
-                WorldModule.tryProcessScreen true screen world
+                WorldModuleInternal.tryProcessScreen true screen world
             if screen.GetExists world && select && not (Option.contains screen (World.getSelectedScreenOpt world)) then
                 if world.Accompanied && world.Halted && not world.AdvancementCleared then // special case to quick cut when halted in the editor.
                     World.defer (fun world ->
@@ -485,12 +492,12 @@ module WorldModule2 =
             // create slide group
             screen.SetSlideOpt (Some { IdlingTime = slideDescriptor.IdlingTime; Destination = destination }) world
             World.createGroup<GroupDispatcher> (Some slideGroup.Name) screen world |> ignore<Group>
-            World.setGroupProtected true slideGroup world |> ignore<bool>
+            World.setGroupProtection ManualProtection slideGroup world |> ignore<bool>
             slideGroup.SetPersistent false world
 
             // create slide sprite
             World.createEntity<StaticSpriteDispatcher> None DefaultOverlay (Some slideSprite.Surnames) slideGroup world |> ignore<Entity>
-            World.setEntityProtected true slideSprite world |> ignore<bool>
+            World.setEntityProtection ManualProtection slideSprite world |> ignore<bool>
             slideSprite.SetPersistent false world
             slideSprite.SetSize world.Eye2dSize.V3 world
             slideSprite.SetAbsolute true world
@@ -1166,10 +1173,11 @@ module WorldModule2 =
                 if evt.wheel.preciseY <> 0.0f then
                     let flipped = evt.wheel.direction = uint SDL.SDL_MouseWheelDirection.SDL_MOUSEWHEEL_FLIPPED
                     let travel = evt.wheel.preciseY * if flipped then -1.0f else 1.0f
-                    imGui.HandleMouseWheelChange travel
+                    MouseState.MouseScrollStateCurrent <- MouseState.MouseScrollStateCurrent + travel
+                    imGui.HandleMouseScrollChange travel
                     let eventData = { Travel = travel }
-                    let eventTrace = EventTrace.debug "World" "processInput2" "MouseWheel" EventTrace.empty
-                    World.publishPlus eventData Nu.Game.Handle.MouseWheelEvent eventTrace Nu.Game.Handle true true world
+                    let eventTrace = EventTrace.debug "World" "processInput2" "MouseScroll" EventTrace.empty
+                    World.publishPlus eventData Nu.Game.Handle.MouseScrollEvent eventTrace Nu.Game.Handle true true world
             | SDL.SDL_EventType.SDL_TEXTINPUT ->
                 let io = ImGui.GetIO ()
                 let imGui = World.getImGui world
@@ -1326,8 +1334,8 @@ module WorldModule2 =
                 let game = Nu.Game.Handle
                 let screenOpt = World.getSelectedScreenOpt world
                 let groups = World.getGroups1 world
-                World.getElements3dInPlay HashSet3dNormalCached world
-                World.getElements2dInPlay HashSet2dNormalCached world
+                World.getElements3dInPlay WorldModuleInternal2.HashSet3dNormalCached world
+                World.getElements2dInPlay WorldModuleInternal2.HashSet2dNormalCached world
                 world.Timers.UpdateGatherTimer.Stop ()
 
                 // attempt to process game
@@ -1353,18 +1361,18 @@ module WorldModule2 =
 
                 // attempt to process entities
                 world.Timers.UpdateEntitiesTimer.Restart ()
-                for element in HashSet3dNormalCached do
+                for element in WorldModuleInternal2.HashSet3dNormalCached do
                     if element.Entry.GetExists world then
                         World.tryProcessEntity zeroDelta element.Entry world
-                for element in HashSet2dNormalCached do
+                for element in WorldModuleInternal2.HashSet2dNormalCached do
                     if element.Entry.GetExists world then
                         World.tryProcessEntity zeroDelta element.Entry world
                 world.Timers.UpdateEntitiesTimer.Stop ()
 
             // free cached values
             finally
-                HashSet3dNormalCached.Clear ()
-                HashSet2dNormalCached.Clear ()
+                WorldModuleInternal2.HashSet3dNormalCached.Clear ()
+                WorldModuleInternal2.HashSet2dNormalCached.Clear ()
 
         static member internal sweepSimulants (world : World) =
 
@@ -1372,7 +1380,7 @@ module WorldModule2 =
             for (simulantAddress, simulantImSim) in world.SimulantsImSim do
                 if not simulantImSim.SimulantUtilized then
                     let simulant = World.deriveFromAddress simulantAddress
-                    ImSimSimulantsToDestroy.Add (simulantImSim.InitializationTime, simulant)
+                    WorldModuleInternal2.ImSimSimulantsToDestroy.Add (simulantImSim.InitializationTime, simulant)
                     World.setSimulantsImSim (SUMap.remove simulantAddress world.SimulantsImSim) world
                 else
                     if world.Imperative then
@@ -1381,11 +1389,11 @@ module WorldModule2 =
                     else
                         let simulantsImSim = SUMap.add simulantAddress { simulantImSim with SimulantUtilized = false; SimulantInitializing = false } world.SimulantsImSim
                         World.setSimulantsImSim simulantsImSim world
-            ImSimSimulantsToDestroy.Sort SimulantImSimComparer
+            WorldModuleInternal2.ImSimSimulantsToDestroy.Sort WorldModuleInternal2.SimulantImSimComparer
 
             // destroy simulants
-            for (_, simulant) in ImSimSimulantsToDestroy do World.destroy simulant world
-            ImSimSimulantsToDestroy.Clear ()
+            for (_, simulant) in WorldModuleInternal2.ImSimSimulantsToDestroy do World.destroy simulant world
+            WorldModuleInternal2.ImSimSimulantsToDestroy.Clear ()
 
             // update subscription bookkeeping
             for (subscriptionKey, subscriptionImSim) in world.SubscriptionsImSim do
@@ -1442,8 +1450,8 @@ module WorldModule2 =
                 let screens = World.getScreens world
                 let selectedScreenOpt = World.getSelectedScreenOpt world
                 let groups = World.getGroups1 world
-                World.getElements3dInPlay HashSet3dNormalCached world
-                World.getElements2dInPlay HashSet2dNormalCached world
+                World.getElements3dInPlay WorldModuleInternal2.HashSet3dNormalCached world
+                World.getElements2dInPlay WorldModuleInternal2.HashSet2dNormalCached world
                 world.Timers.UpdateGatherTimer.Stop ()
 
                 // update game
@@ -1468,12 +1476,12 @@ module WorldModule2 =
 
                 // update entities
                 world.Timers.UpdateEntitiesTimer.Restart ()
-                for element in HashSet3dNormalCached do
+                for element in WorldModuleInternal2.HashSet3dNormalCached do
                     if element.Entry.GetExists world then
                         World.tryProcessEntity false element.Entry world
                     if element.Entry.GetExists world && (advancing && not (element.Entry.GetStatic world) || element.Entry.GetAlwaysUpdate world) then
                         World.updateEntity element.Entry world
-                for element in HashSet2dNormalCached do
+                for element in WorldModuleInternal2.HashSet2dNormalCached do
                     if element.Entry.GetExists world then
                         World.tryProcessEntity false element.Entry world
                     if element.Entry.GetExists world && (advancing && not (element.Entry.GetStatic world) || element.Entry.GetAlwaysUpdate world) then
@@ -1482,8 +1490,8 @@ module WorldModule2 =
 
             // free cached values
             finally
-                HashSet3dNormalCached.Clear ()
-                HashSet2dNormalCached.Clear ()
+                WorldModuleInternal2.HashSet3dNormalCached.Clear ()
+                WorldModuleInternal2.HashSet2dNormalCached.Clear ()
 
         static member private postUpdateSimulants (world : World) =
 
@@ -1622,33 +1630,35 @@ module WorldModule2 =
                     else hashSetPlus HashIdentity.Structural []
                 match renderPass with
                 | LightMapPass (_, lightMapBounds) ->
-                    World.getElements3dInViewBox lightMapBounds HashSet3dNormalCached world
-                    for element in HashSet3dNormalCached do
+                    World.getElements3dInViewBox lightMapBounds WorldModuleInternal2.HashSet3dNormalCached world
+                    for element in WorldModuleInternal2.HashSet3dNormalCached do
                         if not element.StaticInPlay then
-                            HashSet3dNormalCached.Remove element |> ignore<bool>
+                            WorldModuleInternal2.HashSet3dNormalCached.Remove element |> ignore<bool>
                 | ShadowPass (_, _, lightType, dynamicShadows, _, shadowFrustum) ->
                     let shadowInterior = LightType.shouldShadowInterior lightType
-                    World.getElements3dInViewFrustum shadowInterior true shadowFrustum HashSet3dNormalCached world
+                    World.getElements3dInViewFrustum shadowInterior true shadowFrustum WorldModuleInternal2.HashSet3dNormalCached world
                     if not dynamicShadows then
-                        for element in HashSet3dNormalCached do
+                        for element in WorldModuleInternal2.HashSet3dNormalCached do
                             if not element.StaticInPlay then
-                                HashSet3dNormalCached.Remove element |> ignore<bool>
+                                WorldModuleInternal2.HashSet3dNormalCached.Remove element |> ignore<bool>
                 | ReflectionPass (_, _) -> ()
-                | NormalPass -> World.getElements3dInView HashSet3dNormalCached world
+                | NormalPass -> World.getElements3dInView WorldModuleInternal2.HashSet3dNormalCached world
                 match renderPass with
                 | LightMapPass (_, _) -> ()
                 | ShadowPass (_, _, _, _, _, _) -> ()
                 | ReflectionPass (_, _) -> ()
-                | NormalPass -> World.getElements2dInView HashSet2dNormalCached world
+                | NormalPass -> World.getElements2dInView WorldModuleInternal2.HashSet2dNormalCached world
                 world.Timers.RenderGatherTimer.Stop ()
 
                 // render simulants
-                World.renderSimulantsInternal8 game screenOpt groups groupsInvisible HashSet3dNormalCached HashSet2dNormalCached renderPass world
+                World.renderSimulantsInternal8
+                    game screenOpt groups groupsInvisible
+                    WorldModuleInternal2.HashSet3dNormalCached WorldModuleInternal2.HashSet2dNormalCached renderPass world
 
             // free cached values
             finally
-                HashSet3dNormalCached.Clear ()
-                HashSet2dNormalCached.Clear ()
+                WorldModuleInternal2.HashSet3dNormalCached.Clear ()
+                WorldModuleInternal2.HashSet2dNormalCached.Clear ()
 
         static member private renderSimulants lightMapRenderRequested world =
 
@@ -1671,7 +1681,7 @@ module WorldModule2 =
                 // create shadow pass descriptors
                 let eyeCenter = World.getEye3dCenter world
                 let lightBox = World.getLight3dViewBox world
-                let lights = World.getLights3dInViewBox lightBox HashSet3dShadowCached world // NOTE: this may not be the optimal way to query.
+                let lights = World.getLights3dInViewBox lightBox WorldModuleInternal2.HashSet3dShadowCached world // NOTE: this may not be the optimal way to query.
                 let shadowPassDescriptorsSortable =
                     [|for light in lights do
                         if light.GetDesireShadows world then
@@ -1742,13 +1752,13 @@ module WorldModule2 =
                             World.renderSimulantsInternal (ShadowPass (light.GetId world, None, lightType, dynamicShadows, light.GetRotation world, shadowFrustum)) world
                             shadowTexturesCount <- inc shadowTexturesCount
 
-                    | DirectionalLight ->
+                    | DirectionalLight offsetForwardScalar ->
                         if shadowTexturesCount < Constants.Render.ShadowTexturesMax then
 
                             // compute cull frustum
                             let shadowRotation = light.GetRotation world
                             let shadowCutoff = light.GetLightCutoff world
-                            let shadowOrigin = Light3dFacetModule.getDirectionalLightOrigin shadowRotation shadowCutoff world
+                            let shadowOrigin = Light3dFacetModule.getDirectionalLightOrigin shadowRotation shadowCutoff offsetForwardScalar world
                             let shadowForward = shadowRotation.Down
                             let shadowUp = shadowForward.OrthonormalUp
                             let shadowNearDistance = Constants.Render.NearPlaneDistanceInterior
@@ -1815,8 +1825,8 @@ module WorldModule2 =
                                     then hashSetPlus HashIdentity.Structural (Seq.filter (fun (group : Group) -> not (group.GetEditing world)) groups)
                                     else hashSetPlus HashIdentity.Structural []
                                 let shadowInterior = LightType.shouldShadowInterior CascadedLight
-                                World.getElements3dInViewFrustum shadowInterior true cullFrustum HashSet3dNormalCached world
-                                World.getElements2dInView HashSet2dNormalCached world
+                                World.getElements3dInViewFrustum shadowInterior true cullFrustum WorldModuleInternal2.HashSet3dNormalCached world
+                                World.getElements2dInView WorldModuleInternal2.HashSet2dNormalCached world
                                 world.Timers.RenderGatherTimer.Stop ()
 
                                 // render cascades
@@ -1866,13 +1876,13 @@ module WorldModule2 =
                                     // render
                                     World.renderSimulantsInternal8
                                         game screenOpt groups groupsInvisible
-                                        HashSet3dNormalCached HashSet2dNormalCached
+                                        WorldModuleInternal2.HashSet3dNormalCached WorldModuleInternal2.HashSet2dNormalCached
                                         (ShadowPass (lightId, Some (i, sectionViewOrtho, sectionProjectionOrtho), lightType, dynamicShadows, shadowRotation, cullFrustum)) world
 
                             // free cached values
                             finally
-                                HashSet3dNormalCached.Clear ()
-                                HashSet2dNormalCached.Clear ()
+                                WorldModuleInternal2.HashSet3dNormalCached.Clear ()
+                                WorldModuleInternal2.HashSet2dNormalCached.Clear ()
 
                             // fin
                             shadowCascadesCount <- inc shadowCascadesCount
@@ -1882,7 +1892,7 @@ module WorldModule2 =
 
             // free cached values
             finally
-                HashSet3dShadowCached.Clear ()
+                WorldModuleInternal2.HashSet3dShadowCached.Clear ()
 
         static member private processInput (world : World) =
             if SDL.SDL_WasInit SDL.SDL_INIT_TIMER <> 0u then
@@ -1969,9 +1979,9 @@ module WorldModule2 =
 
                                     // update simulants
                                     world.Timers.UpdateTimer.Restart ()
-                                    WorldModule.UpdatingSimulants <- true
+                                    WorldModuleInternal.UpdatingSimulants <- true
                                     World.updateSimulants world
-                                    WorldModule.UpdatingSimulants <- false
+                                    WorldModuleInternal.UpdatingSimulants <- false
                                     world.Timers.UpdateTimer.Stop ()
                                     if world.Alive then
 
@@ -1996,7 +2006,7 @@ module WorldModule2 =
 
                                                     // process tasklets that have been scheduled and are ready to run
                                                     world.Timers.TaskletsTimer.Restart ()
-                                                    WorldModule.EndFrameProcessingStarted <- true
+                                                    WorldModuleInternal.EndFrameProcessingStarted <- true
                                                     World.processTasklets world
                                                     world.Timers.TaskletsTimer.Stop ()
                                                     if world.Alive then
@@ -2044,10 +2054,11 @@ module WorldModule2 =
                                                                         // automatically enable frame pacing when need is detected
                                                                         if not world.FramePacing then
                                                                             let frameTimeMinimum = GameTime.DesiredFrameTimeMinimum
-                                                                            if world.Timers.MainThreadTimer.Elapsed.TotalSeconds < frameTimeMinimum * 0.9 then FramePaceIssues <- inc FramePaceIssues
-                                                                            FramePaceChecks <- inc FramePaceChecks
-                                                                            if FramePaceIssues = 15 then World.setFramePacing true world
-                                                                            if FramePaceChecks % 30 = 0 then FramePaceIssues <- 0
+                                                                            if world.Timers.MainThreadTimer.Elapsed.TotalSeconds < frameTimeMinimum * 0.9 then
+                                                                                WorldModuleInternal2.FramePaceIssues <- inc WorldModuleInternal2.FramePaceIssues
+                                                                            WorldModuleInternal2.FramePaceChecks <- inc WorldModuleInternal2.FramePaceChecks
+                                                                            if WorldModuleInternal2.FramePaceIssues = 15 then World.setFramePacing true world
+                                                                            if WorldModuleInternal2.FramePaceChecks % 30 = 0 then WorldModuleInternal2.FramePaceIssues <- 0
 
                                                                         // pace frame when enabled
                                                                         if world.FramePacing then
@@ -2102,7 +2113,7 @@ module WorldModule2 =
 
                                                                     // update time and recur
                                                                     world.Timers.FrameTimer.Stop ()
-                                                                    WorldModule.EndFrameProcessingStarted <- false
+                                                                    WorldModuleInternal.EndFrameProcessingStarted <- false
                                                                     World.updateTime world
                                                                     if world.Advancing then
                                                                         World.publish () (Events.TimeUpdateEvent --> Game) Game world

@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -86,7 +89,7 @@ type Nu () =
             WorldTypes.EmptyGroupContent <- GroupContent.empty
             WorldTypes.EmptyEntityContent <- EntityContent.empty
 
-            // init WorldTypes F# reach-arounds
+            // init WorldTypes F# reach functions
             WorldTypes.viewGame <- fun game world -> World.viewGameProperties (game :?> Game) (world :?> World)
             WorldTypes.viewScreen <- fun screen world -> World.viewScreenProperties (screen :?> Screen) (world :?> World)
             WorldTypes.viewGroup <- fun group world -> World.viewGroupProperties (group :?> Group) (world :?> World)
@@ -96,23 +99,23 @@ type Nu () =
             WorldTypes.handleSubscribeAndUnsubscribeEvent <- fun subscribing eventAddress subscriber worldObj -> World.handleSubscribeAndUnsubscribeEvent subscribing eventAddress subscriber (worldObj :?> World)
             WorldTypes.getEntityIs2d <- fun entityObj worldObj -> World.getEntityIs2d (entityObj :?> Entity) (worldObj :?> World)
 
-            // init WorldModule F# reach-arounds
-            WorldModule.getSelected <- fun simulant world -> World.getSelected simulant world
-            WorldModule.sortSubscriptionsByElevation <- fun subscriptions worldObj -> World.sortSubscriptionsByElevation subscriptions (worldObj :?> World)
-            WorldModule.admitScreenElements <- fun screen world -> World.admitScreenElements screen world
-            WorldModule.evictScreenElements <- fun screen world -> World.evictScreenElements screen world
-            WorldModule.registerScreenPhysics <- fun screen world -> World.registerScreenPhysics screen world
-            WorldModule.unregisterScreenPhysics <- fun screen world -> World.unregisterScreenPhysics screen world
-            WorldModule.register <- fun simulant world -> World.register simulant world
-            WorldModule.unregister <- fun simulant world -> World.unregister simulant world
-            WorldModule.tryProcessGame <- fun game world -> World.tryProcessGame game world
-            WorldModule.tryProcessScreen <- fun screen world -> World.tryProcessScreen screen world
-            WorldModule.tryProcessGroup <- fun group world -> World.tryProcessGroup group world
-            WorldModule.tryProcessEntity <- fun entity world -> World.tryProcessEntity entity world
-            WorldModule.signal <- Nu.worldModuleSignal
-            WorldModule.destroyImmediate <- fun simulant world -> World.destroyImmediate simulant world
-            WorldModule.destroy <- fun simulant world -> World.destroy simulant world
-            WorldModule.getEmptyEffect <- fun () -> Effect.empty :> obj
+            // init WorldModuleInternal F# reach functions
+            WorldModuleInternal.getSelected <- fun simulant world -> World.getSelected simulant world
+            WorldModuleInternal.sortSubscriptionsByElevation <- fun subscriptions worldObj -> World.sortSubscriptionsByElevation subscriptions (worldObj :?> World)
+            WorldModuleInternal.admitScreenElements <- fun screen world -> World.admitScreenElements screen world
+            WorldModuleInternal.evictScreenElements <- fun screen world -> World.evictScreenElements screen world
+            WorldModuleInternal.registerScreenPhysics <- fun screen world -> World.registerScreenPhysics screen world
+            WorldModuleInternal.unregisterScreenPhysics <- fun screen world -> World.unregisterScreenPhysics screen world
+            WorldModuleInternal.register <- fun simulant world -> World.register simulant world
+            WorldModuleInternal.unregister <- fun simulant world -> World.unregister simulant world
+            WorldModuleInternal.tryProcessGame <- fun game world -> World.tryProcessGame game world
+            WorldModuleInternal.tryProcessScreen <- fun screen world -> World.tryProcessScreen screen world
+            WorldModuleInternal.tryProcessGroup <- fun group world -> World.tryProcessGroup group world
+            WorldModuleInternal.tryProcessEntity <- fun entity world -> World.tryProcessEntity entity world
+            WorldModuleInternal.signal <- Nu.worldModuleSignal
+            WorldModuleInternal.destroyImmediate <- fun simulant world -> World.destroyImmediate simulant world
+            WorldModuleInternal.destroy <- fun simulant world -> World.destroy simulant world
+            WorldModuleInternal.getEmptyEffect <- fun () -> Effect.empty :> obj
 
             // init entity module
             WorldModuleEntity.LayoutFacetType <- typeof<LayoutFacet>
@@ -245,7 +248,7 @@ module WorldModule4 =
 
         /// Make the world.
         static member makePlus
-            plugin eventGraph jobGraph geometryViewport windowViewport lateBindingsInstances quadtree octree worldConfig sdlDepsOpt
+            tryMakeEditContext plugin eventGraph jobGraph geometryViewport windowViewport lateBindingsInstances quadtree octree worldConfig sdlDepsOpt
             imGui physicsEngine2d physicsEngine3d rendererPhysics3dOpt rendererProcess audioPlayer cursorClient activeGameDispatcher =
             Nu.init () // ensure game engine is initialized
             let symbolics = Symbolics.makeEmpty ()
@@ -278,6 +281,7 @@ module WorldModule4 =
                   WindowViewport = windowViewport
                   DestructionListRev = []
                   LateBindingsInstances = lateBindingsInstances
+                  TryMakeEditContext = tryMakeEditContext
                   Plugin = plugin
                   PropagationTargets = UMap.makeEmpty HashIdentity.Structural collectionConfig
                   EditDeferrals = UMap.makeEmpty HashIdentity.Structural collectionConfig }
@@ -304,7 +308,7 @@ module WorldModule4 =
             world
 
         /// Make a world with stub dependencies.
-        static member makeStub worldConfig (plugin : NuPlugin) =
+        static member makeStub tryMakeEditContext worldConfig (plugin : NuPlugin) =
 
             // make the world's event delegate
             let eventGraph =
@@ -349,7 +353,7 @@ module WorldModule4 =
             // make the world
             let world =
                 World.makePlus
-                    plugin eventGraph jobGraph geometryViewport windowViewport lateBindingsInstances quadtree octree worldConfig None
+                    tryMakeEditContext plugin eventGraph jobGraph geometryViewport windowViewport lateBindingsInstances quadtree octree worldConfig None
                     imGui physicsEngine2d physicsEngine3d None rendererProcess audioPlayer cursorClient (snd defaultGameDispatcher)
 
             // register the game
@@ -359,7 +363,7 @@ module WorldModule4 =
             world
 
         /// Make the world with the given dependencies.
-        static member make sdlDeps config geometryViewport (windowViewport : Viewport) (plugin : NuPlugin) =
+        static member make tryMakeEditContext sdlDeps config geometryViewport (windowViewport : Viewport) (plugin : NuPlugin) =
 
             // create asset graph
             let assetGraph = AssetGraph.makeFromFileOpt Assets.Global.AssetGraphFilePath
@@ -458,7 +462,7 @@ module WorldModule4 =
             // make the world
             let world =
                 World.makePlus
-                    plugin eventGraph jobGraph geometryViewport windowViewport lateBindingsInstances quadtree octree config (Some sdlDeps)
+                    tryMakeEditContext plugin eventGraph jobGraph geometryViewport windowViewport lateBindingsInstances quadtree octree config (Some sdlDeps)
                     imGui physicsEngine2d physicsEngine3d (Some joltDebugRendererImGuiOpt) rendererProcess audioPlayer cursorClient activeGameDispatcher
 
             // add the keyed values
@@ -471,11 +475,11 @@ module WorldModule4 =
 
         /// Run the game engine, initializing dependencies as indicated by WorldConfig, and returning exit code upon
         /// termination.
-        static member runPlus runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess worldConfig windowSize geometryViewport windowViewport plugin =
+        static member runPlus tryMakeEditContext runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess worldConfig windowSize geometryViewport windowViewport plugin =
             match SdlDeps.tryMake worldConfig.SdlConfig worldConfig.Accompanied windowSize with
             | Right sdlDeps ->
                 use sdlDeps = sdlDeps // bind explicitly to dispose automatically
-                let world = World.make sdlDeps worldConfig geometryViewport windowViewport plugin
+                let world = World.make tryMakeEditContext sdlDeps worldConfig geometryViewport windowViewport plugin
                 World.runWithCleanUp runWhile preProcess perProcess postProcess imGuiProcess imGuiPostProcess true world
             | Left error -> Log.error error; Constants.Engine.ExitCodeFailure
 
@@ -485,4 +489,4 @@ module WorldModule4 =
             let windowSize = Constants.Render.DisplayVirtualResolution * Globals.Render.DisplayScalar
             let windowViewport = Viewport.makeWindow1 windowSize
             let geometryViewport = Viewport.makeGeometry windowViewport.Bounds.Size
-            World.runPlus tautology ignore ignore ignore ignore ignore worldConfig windowViewport.Outer.Size geometryViewport windowViewport plugin
+            World.runPlus (constant None) tautology ignore ignore ignore ignore ignore worldConfig windowViewport.Outer.Size geometryViewport windowViewport plugin

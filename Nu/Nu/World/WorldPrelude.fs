@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -103,7 +106,7 @@ type [<SymbolicExpansion>] Nav3dConfig =
       PartitionType : RcPartition }
 
     /// The default 3d navigation configuration.
-    static member defaultConfig =
+    static member val defaultConfig =
         { CellSize = 0.1f
           CellHeight = 0.1f
           AgentHeight = 1.5f
@@ -370,7 +373,7 @@ type [<ReferenceEquality>] WorldConfig =
         not this.Accompanied
 
     /// The default configuration of the world.
-    static member defaultConfig =
+    static member val defaultConfig =
         { Imperative = true
           Accompanied = false
           Advancing = true

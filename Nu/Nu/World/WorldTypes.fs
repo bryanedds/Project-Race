@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -26,18 +29,18 @@ module internal WorldTypes =
     let mutable internal EmptyGroupContent = Unchecked.defaultof<obj>
     let mutable internal EmptyEntityContent = Unchecked.defaultof<obj>
 
-    // Debugging F# reach-arounds.
+    // Debugging F# reach functions.
     let mutable internal viewGame = fun (_ : obj) (_ : obj) -> Array.empty<string * obj>
     let mutable internal viewScreen = fun (_ : obj) (_ : obj) -> Array.empty<string * obj>
     let mutable internal viewGroup = fun (_ : obj) (_ : obj) -> Array.empty<string * obj>
     let mutable internal viewEntity = fun (_ : obj) (_ : obj) -> Array.empty<string * obj>
 
-    // EventGraph F# reach-arounds.
+    // EventGraph F# reach functions.
     let mutable internal getSelectedScreenIdling : obj -> bool = Unchecked.defaultof<_>
     let mutable internal getSelectedScreenTransitioning : obj -> bool = Unchecked.defaultof<_>
     let mutable internal handleSubscribeAndUnsubscribeEvent : bool -> obj Address -> Simulant -> obj -> unit = Unchecked.defaultof<_>
 
-    // Simulant F# reach-arounds.
+    // Simulant F# reach functions.
     let mutable internal getEntityIs2d : obj -> obj -> bool = Unchecked.defaultof<_>
 
 /// The type of a subscription callback.
@@ -309,7 +312,7 @@ and DragDropPayload =
 and EditContext =
     { Snapshot : SnapshotType -> World -> unit
       FocusProperty : unit -> unit
-      UnfocusProperty : unit -> unit
+      UnfocusProperty : unit -> unit // TODO: see if this is ever useful.
       SearchAssetViewer : unit -> unit
       DragDropPayloadOpt : DragDropPayload option
       SnapDrag : single
@@ -404,7 +407,9 @@ and SnapshotType =
     | FreezeEntities
     | ThawEntities
     | Permafreeze
-    | ReregisterPhysics
+    | ClearBlocks
+    | GenerateFromBlockMap
+    | PaintBlocks
     | SynchronizeNav
     | SetEditMode of int
     | ReloadCode
@@ -444,10 +449,12 @@ and SnapshotType =
         | RencenterInProbeBounds -> (scstringMemo this).Spaced
         | ResetProbeBounds -> (scstringMemo this).Spaced
         | VolumeEdit volumeEditType -> "Volume Edit " + volumeEditType
+        | ClearBlocks -> (scstringMemo this).Spaced
+        | GenerateFromBlockMap -> (scstringMemo this).Spaced
+        | PaintBlocks -> (scstringMemo this).Spaced
         | FreezeEntities -> (scstringMemo this).Spaced
         | ThawEntities -> (scstringMemo this).Spaced
         | Permafreeze -> (scstringMemo this).Spaced
-        | ReregisterPhysics -> (scstringMemo this).Spaced
         | SynchronizeNav -> (scstringMemo this).Spaced
         | SetEditMode i -> (scstringMemo this).Spaced + " (" + string (inc i) + " of 2)"
         | ReloadCode -> (scstringMemo this).Spaced
@@ -1081,13 +1088,13 @@ and [<ReferenceEquality; CLIMutable>] ScreenState =
       mutable Xtension : Xtension // mutable to allow inserting new properties on code reload
       mutable Model : DesignerProperty // mutable to allow inserting fallback model on code reload
       Content : ScreenContent
+      Protection : Protection
       TransitionState : TransitionState
       Incoming : Transition
       Outgoing : Transition
       RequestedSong : RequestedSong
       SlideOpt : Slide option
       Nav3d : Nav3d
-      Protected : bool
       Persistent : bool
       Order : int64
       Id : uint64
@@ -1131,13 +1138,13 @@ and [<ReferenceEquality; CLIMutable>] ScreenState =
           Xtension = Xtension.makeFunctional ()
           Model = { DesignerType = typeof<unit>; DesignerValue = () }
           Content = WorldTypes.EmptyScreenContent :?> ScreenContent
+          Protection = Unprotected
           TransitionState = IdlingState time
           Incoming = Transition.make Incoming
           Outgoing = Transition.make Outgoing
           RequestedSong = RequestIgnore
           SlideOpt = None
           Nav3d = Nav3d.makeEmpty ()
-          Protected = false
           Persistent = true
           Order = Core.getTimeStampUnique ()
           Id = id
@@ -1152,8 +1159,8 @@ and [<ReferenceEquality; CLIMutable>] GroupState =
       mutable Xtension : Xtension // mutable to allow inserting new properties on code reload
       mutable Model : DesignerProperty // mutable to allow inserting fallback model on code reload
       Content : GroupContent
+      Protection : Protection
       Editing : bool
-      Protected : bool
       Persistent : bool
       Order : int64
       Id : uint64
@@ -1197,8 +1204,8 @@ and [<ReferenceEquality; CLIMutable>] GroupState =
           Xtension = Xtension.makeFunctional ()
           Model = { DesignerType = typeof<unit>; DesignerValue = () }
           Content = WorldTypes.EmptyGroupContent :?> GroupContent
+          Protection = Unprotected
           Editing = true
-          Protected = false
           Persistent = true
           Order = Core.getTimeStampUnique ()
           Id = id
@@ -1268,7 +1275,6 @@ and [<ReferenceEquality; CLIMutable>] EntityState =
     member this.AlwaysUpdate with get () = this.Transform.AlwaysUpdate and set value = this.Transform.AlwaysUpdate <- value
     member this.AlwaysRender with get () = this.Transform.AlwaysRender and set value = this.Transform.AlwaysRender <- value
     member this.PublishUpdates with get () = this.Transform.PublishUpdates and set value = this.Transform.PublishUpdates <- value
-    member this.Protected with get () = this.Transform.Protected and internal set value = this.Transform.Protected <- value
     member this.Persistent with get () = this.Transform.Persistent and set value = this.Transform.Persistent <- value
     member this.Mounted with get () = this.Transform.Mounted and set value = this.Transform.Mounted <- value
     member this.Is2d = this.Dispatcher.Is2d
@@ -1280,6 +1286,10 @@ and [<ReferenceEquality; CLIMutable>] EntityState =
     member this.Optimized imperative = this.Transform.Optimized imperative
     member internal this.VisibleInView = this.Visible || this.AlwaysRender
     member internal this.StaticInPlay = this.Static && not this.AlwaysUpdate
+
+    member this.Protection
+        with get () = this.Transform.Protection
+        and internal set value = this.Transform.Protection <- value
 
     member this.Presence
         with get () = if this.Absolute then Omnipresent else this.Transform.Presence
@@ -1926,6 +1936,7 @@ and [<ReferenceEquality>] internal WorldExtension =
       WindowViewport : Viewport
       DestructionListRev : Simulant list
       LateBindingsInstances : LateBindingsInstances
+      TryMakeEditContext : unit -> EditContext option
       Plugin : NuPlugin
       PropagationTargets : UMap<Entity, Entity USet>
       EditDeferrals : UMap<EditDeferralId, UList<EditDeferral>> }
@@ -2099,7 +2110,7 @@ and [<NoEquality; NoComparison>] World =
 
     /// Get the current edit context, if any.
     member this.EditContextOpt =
-        this.WorldExtension.Plugin.EditContextOpt
+        this.WorldExtension.TryMakeEditContext ()
 
     /// Get the current ImSim context.
     [<DebuggerBrowsable (DebuggerBrowsableState.Never)>]
@@ -2260,14 +2271,26 @@ and [<AbstractClass>] NuPlugin () =
     abstract EditModes : Map<string, World -> unit>
     default this.EditModes = Map.empty
 
-    /// Attempt to retrieve an edit context for the plugin.
-    abstract EditContextOpt : EditContext option
-    default this.EditContextOpt = None
-
     /// The packages that should be loaded at start-up in all contexts, including in audio player, renderers, and
     /// metadata. The Default package is always included.
     abstract InitialPackages : string list
     default this.InitialPackages = []
+
+    /// The makeable particle emitters.
+    abstract MakeEmitters : Map<string, Particles.MakeEmitter>
+    default this.MakeEmitters = Particles.MakeEmitters.Default
+
+    /// Attempt to make a block granulator function of the given name.
+    abstract GranulatorFns : Map<string, Vector3i * BlockMap.GranulatorFn>
+    default this.GranulatorFns = Map.empty
+
+    /// Attempt to make a block combiner function of the given name.
+    abstract CombinerFns : Map<string, Vector3i * BlockMap.CombinerFn>
+    default this.CombinerFns = Map.empty
+
+    /// Attempt to make a block process function of the given name.
+    abstract ProcessFns : Map<string, Vector3i * BlockMap.ProcessFn<Entity, World>>
+    default this.ProcessFns = Map.empty
 
     /// Clean-up any user-defined resources of the plugin, such with shutting down a Steamworks API.
     abstract CleanUp : unit -> unit
@@ -2281,18 +2304,10 @@ and [<AbstractClass>] NuPlugin () =
     abstract MakeKeyedValues : world : World -> ((string * obj) list)
     default this.MakeKeyedValues _ = []
 
-    /// Attempt to make an emitter of the given name.
-    abstract TryMakeEmitter : time : GameTime -> lifeTimeOpt : GameTime -> particleLifeTimeOpt : GameTime -> particleRate : single -> particleMax : int -> emitterName : string -> Particles.Emitter option
-    default this.TryMakeEmitter time lifeTimeOpt particleLifeTimeOpt particleRate particleMax emitterName =
-        match emitterName with
-        | "BasicStaticSpriteEmitter" -> Particles.BasicStaticSpriteEmitter.makeDefault time lifeTimeOpt particleLifeTimeOpt particleRate particleMax :> Particles.Emitter |> Some
-        | "BasicStaticBillboardEmitter" -> Particles.BasicStaticBillboardEmitter.makeDefault time lifeTimeOpt particleLifeTimeOpt particleRate particleMax :> Particles.Emitter |> Some
-        | _ -> None
-
     /// Make the 2D physics engine for the engine to use.
     abstract MakePhysicsEngine2d : unit -> PhysicsEngine
     default this.MakePhysicsEngine2d () =
-        AetherPhysicsEngine.make (Constants.Physics.GravityDefault * Constants.Engine.Meter2d)
+        Box2dNetPhysicsEngine.make (Constants.Physics.GravityDefault * Constants.Engine.Meter2d)
 
     /// Make a 2D physics engine render context for the engine to use for the current frame.
     abstract MakePhysicsEngine2dRenderContext :
@@ -2301,7 +2316,7 @@ and [<AbstractClass>] NuPlugin () =
         eyeBounds : Box2 ->
         PhysicsEngineRenderContext
     default this.MakePhysicsEngine2dRenderContext segments circles eyeBounds =
-        { new AetherPhysicsEngineRenderContext with
+        { new Box2dNetPhysicsEngineRenderContext with
             override this.DrawLine (start : Vector2, stop : Vector2, color) =
                 match segments.TryGetValue color with
                 | (true, segmentList) -> segmentList.Add (start, stop)

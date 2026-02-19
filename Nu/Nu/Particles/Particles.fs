@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu.Particles
 open System
@@ -128,7 +131,7 @@ type [<Struct>] Body =
       mutable Restitution : single }
 
     /// The default body.
-    static member defaultBody =
+    static member val defaultBody =
         { Position = v3Zero
           Scale = v3One
           Angles = v3Zero
@@ -1238,3 +1241,16 @@ type BasicBillboardEmitterDescriptor =
 /// A map of basic billboard emitters.
 type BasicBillboardEmitterDescriptors =
     BasicParticle BillboardEmitterDescriptors
+
+/// Signature of a function that makes an emitter.
+type MakeEmitter =
+    GameTime -> GameTime -> GameTime -> single -> int -> Emitter
+
+[<RequireQualifiedAccess>]
+module MakeEmitters =
+
+    /// The default makeable emitters.
+    let Default =
+        [("BasicStaticSpriteEmitter", fun t l pl pr pm -> BasicStaticSpriteEmitter.makeDefault t l pl pr pm :> Emitter)
+         ("BasicStaticBillboardEmitter", fun t l pl pr pm -> BasicStaticBillboardEmitter.makeDefault t l pl pr pm :> Emitter)]
+        |> Map.ofList

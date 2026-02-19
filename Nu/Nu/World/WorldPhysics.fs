@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -452,8 +455,8 @@ module WorldPhysics =
         static member reregisterPhysics world =
             match World.getSelectedScreenOpt world with
             | Some selectedScreen ->
-                WorldModule.unregisterScreenPhysics selectedScreen world
-                WorldModule.registerScreenPhysics selectedScreen world
+                WorldModuleInternal.unregisterScreenPhysics selectedScreen world
+                WorldModuleInternal.registerScreenPhysics selectedScreen world
             | None -> ()
 
         /// Reload all currently selected physics assets.

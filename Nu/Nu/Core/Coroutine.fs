@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -70,8 +73,7 @@ type 'w CoroutineBuilder (launcher : CoroutineDelayed -> unit) =
         match m1 with
         | Cancel -> Cancel
         | Complete -> m2 ()
-        | Sleep (until, continuation) ->
-            Sleep (until, fun () -> this.Combine (continuation (), m2))
+        | Sleep (until, continuation) -> Sleep (until, fun () -> this.Combine (continuation (), m2))
 
     /// Zero is just completion.
     [<DebuggerHidden; DebuggerStepThrough>]

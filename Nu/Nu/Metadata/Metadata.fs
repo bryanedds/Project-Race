@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -1006,7 +1009,7 @@ module Metadata =
     let tryGetAnimatedModelNavShape materialIndex (animatedModel : AnimatedModel AssetTag) =
         tryGetModelNavShape materialIndex animatedModel
 
-    /// Initialize metadata to use the given imperative value and asset graph.
+    /// Initialize metadata to use given asset graph.
     let init assetGraph =
         if not Initialized then
             AssetGraphOpt <- Some assetGraph

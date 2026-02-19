@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -256,8 +259,8 @@ type [<ReferenceEquality>] GlRenderer2d =
                     let assetClient =
                         AssetClient
                             (OpenGL.Texture.TextureClient None,
-                                OpenGL.CubeMap.CubeMapClient (),
-                                OpenGL.PhysicallyBased.PhysicallyBasedSceneClient ())
+                             OpenGL.CubeMap.CubeMapClient (),
+                             OpenGL.PhysicallyBased.PhysicallyBasedSceneClient ())
                     let renderPackage = { Assets = dictPlus StringComparer.Ordinal []; PackageState = assetClient }
                     renderer.RenderPackages.[packageName] <- renderPackage
                     renderPackage

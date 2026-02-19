@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 #I __SOURCE_DIRECTORY__
 #r "nuget: Aether.Physics2D, 2.2.0"
@@ -75,7 +78,10 @@ let enumEntriesToCode entries =
 
 let generateBindingsCode codesStr =
     "// Nu Game Engine.\n" +
+    "// Required Notice:\n" +
     "// Copyright (C) Bryan Edds.\n" +
+    "// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.\n" +
+    "// See https://github.com/bryanedds/Nu/blob/master/License.md.\n" +
     "\n" +
     "//*****************************************************************************************//\n" +
     "//                                                                                         //\n" +
@@ -89,8 +95,7 @@ let generateBindingsCode codesStr =
     "\n" +
     "/// Denotes a key on the keyboard.\n" +
     "type KeyboardKey =\n" +
-    codesStr +
-    "\n"
+    codesStr
 
 do
     Directory.SetCurrentDirectory (__SOURCE_DIRECTORY__ + "/../bin/Debug")

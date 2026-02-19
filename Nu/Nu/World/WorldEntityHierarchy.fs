@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -365,9 +368,10 @@ module Permafreezer3dDispatcherExtensions =
                       AngularVelocity = v3Zero
                       AngularDamping = 0.0f
                       AngularFactor = v3Zero
+                      KinematicPushLimitOpt = None
                       Substance = Mass 0.0f
                       Gravity = GravityWorld
-                      CharacterProperties = CharacterProperties.defaultProperties
+                      CharacterProperties = StairSteppingCharacterProperties StairSteppingCharacterProperties.defaultProperties
                       VehicleProperties = VehiclePropertiesAbsent
                       CollisionGroup = 0
                       CollisionDetection = Discrete

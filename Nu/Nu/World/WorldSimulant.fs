@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -210,7 +213,7 @@ module WorldSimulantModule =
         static member getChildren (simulant : Simulant) world =
             match simulant with
             | :? Entity as entity -> enumerable<Simulant> (World.getEntityChildren entity world)
-            | :? Group as group -> enumerable<Simulant> (World.getSovereignEntities group world)
+            | :? Group as group -> enumerable<Simulant> (World.getEntitiesSovereign group world)
             | :? Screen as screen -> enumerable<Simulant> (World.getGroups screen world)
             | :? Game -> enumerable<Simulant> (World.getScreens world)
             | _ -> failwithumf ()

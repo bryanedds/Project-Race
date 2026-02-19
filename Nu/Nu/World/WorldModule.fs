@@ -1,8 +1,12 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
+open System.Numerics
 open System.Reflection
 open Prime
 
@@ -24,9 +28,9 @@ module WorldModuleOperators =
     let relate<'t when 't :> Simulant> (simulant : Simulant) (simulant2 : 't) : 't Address =
         Address.relate<Simulant, 't> (itoa simulant.SimulantAddress) (itoa simulant2.SimulantAddress)
 
-/// Universal function definitions for the world (1/4).
-[<AutoOpen>]
-module WorldModule =
+/// Internal function definitions for the world (1/2).
+[<RequireQualifiedAccess>]
+module internal WorldModuleInternal =
 
     /// Track if we're in the portion of the frame simulants are being updated.
     /// TODO: P1: consider making this an AmbientState flag.
@@ -36,27 +40,27 @@ module WorldModule =
     /// TODO: P1: consider making this an AmbientState flag.
     let mutable internal EndFrameProcessingStarted = false
 
-    /// F# reach-around for checking that a simulant is selected.
+    /// F# reach function for checking that a simulant is selected.
     let mutable internal getSelected : Simulant -> World -> bool =
         Unchecked.defaultof<_>
 
-    /// F# reach-around for sorting subscriptions by elevation.
+    /// F# reach function for sorting subscriptions by elevation.
     let mutable internal sortSubscriptionsByElevation : (uint64 * SubscriptionEntry) seq -> obj -> (uint64 * SubscriptionEntry) seq =
         Unchecked.defaultof<_>
 
-    /// F# reach-around for registering physics entities of an entire screen.
+    /// F# reach function for registering physics entities of an entire screen.
     let mutable internal evictScreenElements : Screen -> World -> unit =
         Unchecked.defaultof<_>
 
-    /// F# reach-around for unregistering physics entities of an entire screen.
+    /// F# reach function for unregistering physics entities of an entire screen.
     let mutable internal admitScreenElements : Screen -> World -> unit =
         Unchecked.defaultof<_>
 
-    /// F# reach-around for registering physics entities of an entire screen.
+    /// F# reach function for registering physics entities of an entire screen.
     let mutable internal registerScreenPhysics : Screen -> World -> unit =
         Unchecked.defaultof<_>
 
-    /// F# reach-around for unregistering physics entities of an entire screen.
+    /// F# reach function for unregistering physics entities of an entire screen.
     let mutable internal unregisterScreenPhysics : Screen -> World -> unit =
         Unchecked.defaultof<_>
 
@@ -92,6 +96,10 @@ module WorldModule =
 
     let mutable internal getEmptyEffect : unit -> obj =
         Unchecked.defaultof<_>
+
+/// Universal function definitions for the world (1/4).
+[<AutoOpen>]
+module WorldModule =
 
     type World with // JobGraph
 
@@ -449,7 +457,7 @@ module WorldModule =
         /// When called in an ImSim Process context, will provide the ImSim simulant context and declared values from
         /// World that were active in that Process context as well as time and advancement state.
         static member defer operation (simulant : Simulant) (world : World) =
-            let time = if EndFrameProcessingStarted && world.Advancing then GameTime.epsilon else GameTime.zero
+            let time = if WorldModuleInternal.EndFrameProcessingStarted && world.Advancing then GameTime.epsilon else GameTime.zero
             World.schedule time operation simulant world
 
         /// Attempt to get the window flags.
@@ -692,7 +700,7 @@ module WorldModule =
             let subscriptionsOpt =
                 if hierarchical then
                     EventGraph.getSubscriptionsSorted
-                        sortSubscriptionsByElevation eventAddressObj world.EventGraph world
+                        WorldModuleInternal.sortSubscriptionsByElevation eventAddressObj world.EventGraph world
                 else
                     let subscriptions = EventGraph.getSubscriptions world.EventGraph
                     match UMap.tryFind eventAddressObj subscriptions with
@@ -709,7 +717,7 @@ module WorldModule =
                     let (_, subscriptionEntry) = enr.Current
                     if (match handling with Cascade -> true | Resolve -> false) && world.Alive then
                         let subscriber = subscriptionEntry.SubscriptionSubscriber
-                        if not selectedOnly || getSelected subscriber world then
+                        if not selectedOnly || WorldModuleInternal.getSelected subscriber world then
                             let namesLength = subscriber.SimulantAddress.Names.Length
                             if namesLength >= 4 then
                                 // OPTIMIZATION: handling common case explicitly first.
@@ -926,7 +934,9 @@ module WorldModule =
 
         /// Attempt to make an emitter with the given parameters.
         static member tryMakeEmitter time lifeTimeOpt particleLifeTimeMaxOpt particleRate particleMax emitterStyle (world : World) =
-            world.WorldExtension.Plugin.TryMakeEmitter time lifeTimeOpt particleLifeTimeMaxOpt particleRate particleMax emitterStyle
+            match world.WorldExtension.Plugin.MakeEmitters.TryGetValue emitterStyle with
+            | (true, makeEmitter) -> Some (makeEmitter time lifeTimeOpt particleLifeTimeMaxOpt particleRate particleMax)
+            | (false, _)-> None
 
         static member internal makePhysicsEngine2dRenderContext segments circles (world : World) =
             world.WorldExtension.Plugin.MakePhysicsEngine2dRenderContext segments circles world.Eye2dBounds

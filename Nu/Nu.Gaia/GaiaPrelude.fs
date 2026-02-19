@@ -1,5 +1,8 @@
 ﻿// Gaia - The Nu Game Engine editor.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Gaia - The Nu Game Engine editor is licensed under the Nu Game Engine Noncommercial License.
+// See: https://github.com/bryanedds/Nu/master/License.md
 
 namespace Nu.Gaia
 open System
@@ -59,7 +62,7 @@ type [<SymbolicExpansion>] GaiaState =
           AlternativeEyeTravelInput = alternativeEyeTravelInput
           OverlayMode = overlayMode }
 
-    static member defaultState =
+    static member val defaultState =
         GaiaState.make
             "" None false false false
             v2Zero Constants.Engine.Eye3dCenterDefault quatIdentity Constants.Audio.SoundVolumeDefault Constants.Audio.SongVolumeDefault

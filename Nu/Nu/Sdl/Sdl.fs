@@ -1,5 +1,8 @@
 ﻿// Nu Game Engine.
+// Required Notice:
 // Copyright (C) Bryan Edds.
+// Nu Game Engine is licensed under the Nu Game Engine Noncommercial License.
+// See https://github.com/bryanedds/Nu/blob/master/License.md.
 
 namespace Nu
 open System
@@ -25,7 +28,7 @@ type SdlWindowConfig =
       WindowFlags : SDL.SDL_WindowFlags }
 
     /// A default SdlWindowConfig.
-    static member defaultConfig =
+    static member val defaultConfig =
         { WindowTitle = "Nu Game"
           WindowX = SDL.SDL_WINDOWPOS_UNDEFINED
           WindowY = SDL.SDL_WINDOWPOS_UNDEFINED
@@ -36,7 +39,7 @@ type [<ReferenceEquality>] SdlConfig =
     { WindowConfig : SdlWindowConfig }
 
     /// A default SdlConfig.
-    static member defaultConfig =
+    static member val defaultConfig =
         { WindowConfig = SdlWindowConfig.defaultConfig }
 
 [<RequireQualifiedAccess>]
