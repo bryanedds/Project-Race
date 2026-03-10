@@ -10,7 +10,7 @@ open System.Collections.Frozen
 open System.Configuration
 open System.Diagnostics
 open System.Numerics
-open SDL2
+open SDL
 open Prime
 open Nu
 
@@ -45,7 +45,7 @@ module OpenGL =
 
     let [<Literal>] VersionMajor = 4
     let [<Literal>] VersionMinor = 6
-    let [<Literal>] Profile = SDL.SDL_GLprofile.SDL_GL_CONTEXT_PROFILE_CORE
+    let [<Literal>] Profile = SDL3.SDL_GL_CONTEXT_PROFILE_CORE
     let [<Uniform>] GlslVersionPragma = "#version " + string VersionMajor + string VersionMinor + "0" + " core"
     let [<Literal>] TextureImageUnitsRequired = 32
     let [<Uniform>] mutable HlDebug = match ConfigurationManager.AppSettings.["HlDebug"] with null -> false | value -> scvalue value
@@ -196,12 +196,12 @@ module Render =
     let [<Uniform>] mutable DisplayVirtualResolution = match ConfigurationManager.AppSettings.["DisplayVirtualResolution"] with null -> v2i 640 360 | value -> scvalue value
     let [<Uniform>] mutable SsaoResolutionDivisor = match ConfigurationManager.AppSettings.["SsaoResolutionDivisor"] with null -> 1 | value -> scvalue value
     let [<Uniform>] Play3dBoxSize = Vector3 64.0f
-    let [<Uniform>] Light3dBoxSize = Vector3 32.0f
     let [<Uniform>] WindowClearColor = Color.Zero
     let [<Uniform>] ViewportClearColor = Color.Zero // NOTE: do not change this color as the deferred lighting shader checks if position.w zero to ignore fragment.
     let [<Literal>] TexturePriorityDefault = 0.5f // higher priority than (supposed) default, but not maximum. this value is arrived at through experimenting with a Windows NVidia driver.
     let [<Uniform>] mutable TextureAnisotropyMax = match ConfigurationManager.AppSettings.["TextureAnisotropyMax"] with null -> 16.0f | value -> scvalue value
     let [<Uniform>] mutable TextureMinimalMipmapIndex = match ConfigurationManager.AppSettings.["TextureMinimalMipmapIndex"] with null -> 2 | value -> scvalue value
+    let [<Uniform>] mutable TextureBlockCompression = match ConfigurationManager.AppSettings.["TextureBlockCompression"] with null -> BcCompression | value -> scvalue value
     let [<Literal>] SpriteBatchSize = 192 // NOTE: remember to update SPRITE_BATCH_SIZE in shaders when changing this!
     let [<Literal>] SpriteBorderTexelScalar = 0.005f
     let [<Literal>] SpriteMessagesPrealloc = 256
@@ -266,12 +266,12 @@ module Render =
     let [<Literal>] SssEnabledLocalDefault = true
     let [<Literal>] SsaoEnabledGlobalDefault = true
     let [<Literal>] SsaoEnabledLocalDefault = true
-    let [<Literal>] SsaoSampleCountDefault = 12
+    let [<Literal>] SsaoSampleCountDefault = 24
     let [<Literal>] SsaoSampleCountMax = 128
-    let [<Literal>] SsaoIntensityDefault = 1.5f
-    let [<Literal>] SsaoBiasDefault = 0.025f
-    let [<Literal>] SsaoRadiusDefault = 0.125f
-    let [<Literal>] SsaoDistanceMaxDefault = 0.125f
+    let [<Literal>] SsaoIntensityDefault = 1.35f
+    let [<Literal>] SsaoBiasDefault = 0.01f
+    let [<Literal>] SsaoRadiusDefault = 0.2f
+    let [<Literal>] SsaoDistanceMaxDefault = 0.15f
     let [<Literal>] SsvfEnabledGlobalDefault = true
     let [<Literal>] SsvfEnabledLocalDefault = true
     let [<Literal>] SsvfIntensityDefault = 1.0f
@@ -346,7 +346,7 @@ module Render =
     let [<Literal>] RefractiveIndexDefault = 1.0f
     let [<Literal>] ClearCoatDefault = 1.0f
     let [<Literal>] ClearCoatRoughnessDefault = 1.0f
-    let [<Literal>] FontSizeDefault = 14
+    let [<Literal>] FontSizeDefault = 14.0f
     let [<Literal>] Body3dSegmentRenderMagnitudeMax = 48.0f
     let [<Literal>] Body3dSegmentRenderDistanceMax = 40.0f
     let [<Literal>] Body3dRenderDistanceMax = 32.0f
@@ -354,6 +354,7 @@ module Render =
 [<RequireQualifiedAccess>]
 module Audio =
 
+    let [<Literal>] TrackPoolSize = 64
     let [<Literal>] MasterAudioVolumeDefault = 1.0f
     let [<Literal>] MasterSoundVolumeDefault = 1.0f
     let [<Literal>] MasterSongVolumeDefault = 1.0f
@@ -361,8 +362,6 @@ module Audio =
     let [<Literal>] SongVolumeDefault = 1.0f
     let [<Uniform>] FadeOutTimeDefault = GameTime.ofSeconds 0.5
     let [<Uniform>] SongResumptionMax = GameTime.ofSeconds 90.0 // HACK: prevents songs from starting over too often due to hack in SdlAudioPlayer.playSong.
-    let [<Literal>] Frequency = 44100
-    let [<Literal>] BufferSize = 1024
     let [<Literal>] FadeInSecondsMin = 0.1 // NOTE: Mix_FadeInMusicPos seems to sometimes cause audio 'popping' when starting a song, so a minimum fade is used instead.
 
 [<RequireQualifiedAccess>]

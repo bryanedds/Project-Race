@@ -63,6 +63,13 @@ module Metadata =
                 let height = BinaryPrimitives.ReadUInt32LittleEndian (ddsHeader.AsSpan (12, 4))
                 let width = BinaryPrimitives.ReadUInt32LittleEndian (ddsHeader.AsSpan (16, 4))
                 Some (OpenGL.Texture.TextureMetadata.make (int width) (int height))
+            elif fileExtension = ".ktx" then
+                let ktxHeader = Array.zeroCreate<byte> 44
+                use fileStream = new FileStream (filePath, FileMode.Open, FileAccess.Read, FileShare.Read)
+                fileStream.ReadExactly ktxHeader
+                let height = BinaryPrimitives.ReadUInt32LittleEndian (ktxHeader.AsSpan (36, 4))
+                let width = BinaryPrimitives.ReadUInt32LittleEndian (ktxHeader.AsSpan (40, 4))
+                Some (OpenGL.Texture.TextureMetadata.make (int width) (int height))
             elif fileExtension = ".tga" then
                 let ddsHeader = Array.zeroCreate<byte> 16
                 use fileStream = new FileStream (filePath, FileMode.Open, FileAccess.Read, FileShare.Read)
@@ -583,8 +590,10 @@ module Metadata =
                         let hasDiffuse =        albedoAssetName.Contains "Diffuse"
                         let hasAlbedo =         albedoAssetName.Contains "Albedo"
                         let eAsset =            asset albedoImage.PackageName (if has_bc then albedoAssetName.Replace ("_bc", "_e")                     elif has_d then albedoAssetName.Replace ("_d", "_e")                    else "")
+                        let emissiveAsset =     asset albedoImage.PackageName (if hasBaseColor then albedoAssetName.Replace ("BaseColor", "Emissive")   elif hasDiffuse then albedoAssetName.Replace ("Diffuse", "Emissive")    elif hasAlbedo  then albedoAssetName.Replace ("Albedo", "Emissive") else "")
                         let emissionAsset =     asset albedoImage.PackageName (if hasBaseColor then albedoAssetName.Replace ("BaseColor", "Emission")   elif hasDiffuse then albedoAssetName.Replace ("Diffuse", "Emission")    elif hasAlbedo  then albedoAssetName.Replace ("Albedo", "Emission") else "")
                         if getMetadataExists eAsset then ValueSome eAsset
+                        elif getMetadataExists emissiveAsset then ValueSome emissiveAsset
                         elif getMetadataExists emissionAsset then ValueSome emissionAsset
                         else ValueNone
                     | ValueNone -> ValueNone
