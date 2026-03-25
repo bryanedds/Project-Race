@@ -501,6 +501,15 @@ module Texture =
                             let resolution = v2i (int mip.Width) (int mip.Height)
                             let bytes = mip.Faces.[0].Data
                             (resolution, bytes))
+                    let bytesArray = // ensure last element isn't a duplicate, which might happen when texture is not power-of-two or perhaps written to disk incorrectly
+                        if bytesArray.Length >= 2 then
+                            let bytesArrayRev = Array.rev bytesArray
+                            let bytesLast = snd bytesArrayRev.[0]
+                            let bytes2ndToLast = snd bytesArrayRev.[1]
+                            if bytes2ndToLast.Length = bytesLast.Length
+                            then Array.allButLast bytesArray
+                            else bytesArray
+                        else bytesArray
                     if minimal && bytesArray.Length > Constants.Render.TextureMinimalMipmapIndex then
                         let bytesArray = Array.skip Constants.Render.TextureMinimalMipmapIndex bytesArray
                         let (resolution, bytes) = Array.head bytesArray
@@ -538,7 +547,8 @@ module Texture =
             // attempt to load data as any format supported by SDL_image on any device
             else
                 let format = SDL_PixelFormat.SDL_PIXELFORMAT_ARGB8888 // seems to be the right format on Ubuntu...
-                let unconvertedPtr = SDL3_image.IMG_Load filePath
+                let filePathSdl = PathF.GetFullPath filePath
+                let unconvertedPtr = SDL3_image.IMG_Load filePathSdl
                 if not (NativePtr.isNullPtr unconvertedPtr) then
                     let unconverted = NativePtr.toByRef unconvertedPtr
                     let metadata = TextureMetadata.make unconverted.w unconverted.h
