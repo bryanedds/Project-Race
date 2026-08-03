@@ -84,10 +84,10 @@ type MyGameDispatcher () =
 #if IMSIM
     inherit GameDispatcherImSim ()
 
-    static let Positions = // 10,000 entities
+    static let Positions = // 12,500 entities
         [|for i in 0 .. dec 50 do
             for j in 0 .. dec 50 do
-                for k in 0 .. dec 4 do
+                for k in 0 .. dec 5 do
                     yield v3 (single i * 0.5f) (single j * 0.5f) (single k * 0.5f)|]
 
     override this.Process (_, world) =
@@ -96,7 +96,7 @@ type MyGameDispatcher () =
         World.doFps "Fps" [Entity.Position .= v3 134.0f -168.0f 0.0f] world
         World.doSkyBox "SkyBox" [] world
         for i in 0 .. dec Positions.Length do
-            let position = Positions.[i]
+            let position = Positions[i]
             World.doEntity<MetricsEntityDispatcher> (string i)
                 [Entity.Presence .= Omnipresent
                  Entity.Position .= position + v3 -12.5f -12.5f -20.0f
@@ -106,10 +106,10 @@ type MyGameDispatcher () =
 #else
     inherit GameDispatcher ()
 
-    static let Positions = // 20,000 entities
+    static let Positions = // 30,000 entities
         [|for i in 0 .. dec 50 do
             for j in 0 .. dec 50 do
-                for k in 0 .. dec 8 do
+                for k in 0 .. dec 12 do
                     yield v3 (single i * 0.5f) (single j * 0.5f) (single k * 0.5f)|]
 
     override this.Register (_, world) =
@@ -126,13 +126,13 @@ type MyGameDispatcher () =
         World.selectScreen (IdlingState world.GameTime) screen world
 #endif
 
-    override this.Update (_, world) =
+    override this.Update (game, world) =
 
-        // handle Alt+F4 when not in editor
-        if  World.isKeyboardAltDown world &&
-            World.isKeyboardKeyDown KeyboardKey.F4 world &&
-            world.Unaccompanied then
-            World.exit world
+        // when not in editor, handle close window button or Alt+F4
+        if world.Unaccompanied then
+            if  World.doSubscriptionAny "Exit" game.ExitRequestEvent world ||
+                World.isKeyboardAltDown world && World.isKeyboardKeyDown KeyboardKey.F4 world then
+                World.exit world
 #endif
 
 type MetricsPlugin () =
@@ -147,4 +147,4 @@ module Program =
         let sdlWindowConfig = { SdlWindowConfig.defaultConfig with WindowTitle = "Metrics" }
         let sdlConfig = { SdlConfig.defaultConfig with WindowConfig = sdlWindowConfig }
         let worldConfig = { WorldConfig.defaultConfig with SdlConfig = sdlConfig }
-        World.run worldConfig (MetricsPlugin ())
+        World.run ignore worldConfig (MetricsPlugin ())

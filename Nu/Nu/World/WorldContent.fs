@@ -70,7 +70,7 @@ module Content =
                 // drag event signals with existing subscription ids forward in time
                 for eventSignalEntry in eventSignalContentsOld do
                     if eventSignalContents.ContainsKey eventSignalEntry.Key then
-                        eventSignalContents.[eventSignalEntry.Key] <- eventSignalEntry.Value
+                        eventSignalContents[eventSignalEntry.Key] <- eventSignalEntry.Value
 
     let
 #if !DEBUG
@@ -109,7 +109,7 @@ module Content =
                 // drag event signals with existing subscription ids forward in time
                 for eventHandlerEntry in eventHandlerContentsOld do
                     if eventHandlerContents.ContainsKey eventHandlerEntry.Key then
-                        eventHandlerContents.[eventHandlerEntry.Key] <- eventHandlerEntry.Value
+                        eventHandlerContents[eventHandlerEntry.Key] <- eventHandlerEntry.Value
 
     let
 #if !DEBUG
@@ -119,10 +119,11 @@ module Content =
         if notNull content.PropertyContentsOpt && content.PropertyContentsOpt.Count > 0 then
             let simulant = if notNull (contentOld.SimulantCachedOpt :> obj) then contentOld.SimulantCachedOpt else simulant
             content.SimulantCachedOpt <- simulant
+            let reinitializing = initializing || reinitializing
             for propertyContent in content.PropertyContentsOpt do
                 if (match propertyContent.PropertyType with
                     | InitializingProperty -> initializing
-                    | ReinitializingProperty -> initializing || reinitializing
+                    | ReinitializingProperty -> reinitializing
                     | DynamicProperty -> true) then
                     let lens = propertyContent.PropertyLens
                     match lens.This :> obj with
@@ -137,15 +138,16 @@ module Content =
         if notNull content.PropertyContentsOpt && content.PropertyContentsOpt.Count > 0 then
             let entity = if notNull (contentOld.EntityCachedOpt :> obj) then contentOld.EntityCachedOpt else entity
             content.EntityCachedOpt <- entity
+            let reinitializing = initializing || reinitializing
             let propertyContents = content.PropertyContentsOpt
             for i in 0 .. dec propertyContents.Count do
-                let propertyContent = propertyContents.[i]
+                let propertyContent = propertyContents[i]
                 let lens = propertyContent.PropertyLens
                 if lens.Name = Constants.Engine.MountOptPropertyName then
                     mountOptOpt <- ValueSome (propertyContent.PropertyValue :?> Entity Address option)
                 if (match propertyContent.PropertyType with
                     | InitializingProperty -> initializing
-                    | ReinitializingProperty -> initializing || reinitializing
+                    | ReinitializingProperty -> reinitializing
                     | DynamicProperty -> true) then
                     match lens.This :> obj with
                     | null -> World.setEntityPropertyFast lens.Name { PropertyType = lens.Type; PropertyValue = propertyContent.PropertyValue } entity world
@@ -214,7 +216,7 @@ module Content =
                     for entry in entitiesPotentiallyAltered do
                         let entity = entry.Key
                         let entityContent = entry.Value
-                        let entityContentOld = contentOld.EntityContentsOpt.[entity.Name]
+                        let entityContentOld = contentOld.EntityContentsOpt[entity.Name]
                         synchronizeEntity initializing reinitializing entityContentOld entityContent origin entity world
                 for (entity : Entity, entityContent : EntityContent) in entitiesAdded do
                     if not (entity.GetExists world) || entity.GetDestroying world then
@@ -238,7 +240,7 @@ module Content =
                     for entry in entitiesPotentiallyAltered do
                         let entity = entry.Key
                         let entityContent = entry.Value
-                        let entityContentOld = contentOld.EntityContentsOpt.[entity.Name]
+                        let entityContentOld = contentOld.EntityContentsOpt[entity.Name]
                         synchronizeEntity initializing reinitializing entityContentOld entityContent origin entity world
                 for (entity : Entity, entityContent : EntityContent) in entitiesAdded do
                     if not (entity.GetExists world) || entity.GetDestroying world then
@@ -260,8 +262,7 @@ module Content =
             if contentOld.GroupFilePathOpt =/= content.GroupFilePathOpt then
                 match contentOld.GroupFilePathOpt with
                 | Some groupFilePath ->
-                    // NOTE: have to load the group file just get the name of the group to destroy...
-                    let groupDescriptorStr = File.ReadAllText groupFilePath
+                    let groupDescriptorStr = File.ReadAllText groupFilePath // NOTE: have to load the group file just get the name of the group to destroy...
                     let groupDescriptor = scvalue<GroupDescriptor> groupDescriptorStr
                     let groupName =
                         Constants.Engine.NamePropertyName
@@ -280,7 +281,7 @@ module Content =
                 for entry in groupsPotentiallyAltered do
                     let group = entry.Key
                     let groupContent = entry.Value
-                    let groupContentOld = contentOld.GroupContents.[group.Name]
+                    let groupContentOld = contentOld.GroupContents[group.Name]
                     synchronizeGroup initializing reinitializing groupContentOld groupContent origin group world
                 for (group : Group, groupContent : GroupContent) in groupsAdded do
                     if not (group.GetExists world) || group.GetDestroying world then
@@ -304,7 +305,7 @@ module Content =
                 for entry in screensPotentiallyAltered do
                     let screen = entry.Key
                     let screenContent = entry.Value
-                    let screenContentOld = contentOld.ScreenContents.[screen.Name]
+                    let screenContentOld = contentOld.ScreenContents[screen.Name]
                     synchronizeScreen initializing reinitializing screenContentOld screenContent origin screen world
                 for (screen : Screen, screenContent : ScreenContent) in screensAdded do
                     if not (screen.GetExists world) || screen.GetDestroying world then
@@ -500,10 +501,28 @@ module Content =
     let tmxMap entityName definitions = entity<TmxMapDispatcher> entityName definitions
 
     /// <summary>
-    /// Describe a Spine skeleton with the given definitions.
-    /// See <see cref="SpineSkeletonDispatcher"/>.
+    /// Describe a 2d circle contour with the given definitions.
+    /// See <see cref="CircleContour2dDispatcher"/>.
     /// </summary>
-    let spineSkeleton entityName definitions = entity<SpineSkeletonDispatcher> entityName definitions
+    let circleContour2d entityName definitions = entity<CircleContour2dDispatcher> entityName definitions
+
+    /// <summary>
+    /// Describe a 2d rectangle contour with the given definitions.
+    /// See <see cref="RectangleContour2dDispatcher"/>.
+    /// </summary>
+    let rectangleContour2d entityName definitions = entity<RectangleContour2dDispatcher> entityName definitions
+
+    /// <summary>
+    /// Describe a 2d spiral contour with the given definitions.
+    /// See <see cref="SpiralContour2dDispatcher"/>.
+    /// </summary>
+    let spiralContour2d entityName definitions = entity<SpiralContour2dDispatcher> entityName definitions
+
+    /// <summary>
+    /// Describe a 2d wedge (pie slice) contour with the given definitions.
+    /// See <see cref="WedgeContour2dDispatcher"/>.
+    /// </summary>
+    let wedgeContour2d entityName definitions = entity<WedgeContour2dDispatcher> entityName definitions
 
     /// <summary>
     /// Describe a 3d light probe with the given definitions.
@@ -750,7 +769,7 @@ module Content =
         | (true, struct (v, (:? 'c as content))) when v === value -> content
         | (_, _) ->
             let content = fn value
-            ContentsCached.[name] <- struct (value, content)
+            ContentsCached[name] <- struct (value, content)
             content
 
     /// Discard cached content.

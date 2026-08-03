@@ -8,7 +8,8 @@ open Nu
 // https://github.com/bryanedds/Nu/wiki/Model-View-Update-for-Games-via-MMCC
 type MyGame =
     { MyGameTime : int64 }
-    static member initial = { MyGameTime = 0L }
+    static member val initial =
+        { MyGameTime = 0L }
 
 // this is our top-level MMCC message type.
 type MyGameMessage =
@@ -35,7 +36,8 @@ type MyGameDispatcher () =
 
     // here we define the game's properties and event handling
     override this.Definitions (_, _) =
-        [Game.UpdateEvent => Update]
+        [Game.UpdateEvent => Update
+         Game.ExitRequestEvent => Exit]
 
     // here we handle the above messages
     override this.Message (myGame, message, _, _) =

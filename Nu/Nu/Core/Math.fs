@@ -6,7 +6,6 @@
 
 namespace System.Numerics
 open System
-open System.Collections.Generic
 open System.ComponentModel
 open System.Globalization
 open System.Numerics
@@ -1144,23 +1143,23 @@ module Matrix3x2 =
         /// Create a matrix from an array of 16 single values.
         static member CreateFromArray (arr : single array) =
             Matrix3x2
-                (arr.[00], arr.[01],
-                 arr.[02], arr.[03],
-                 arr.[04], arr.[05])
+                (arr[00], arr[01],
+                 arr[02], arr[03],
+                 arr[04], arr[05])
 
         /// Convert a Matrix3x2 to an array.
         member this.ToArray () =
             let value = Array.zeroCreate 6
-            value.[00] <- this.M11; value.[01] <- this.M12
-            value.[02] <- this.M21; value.[03] <- this.M22
-            value.[04] <- this.M31; value.[05] <- this.M32
+            value[00] <- this.M11; value[01] <- this.M12
+            value[02] <- this.M21; value[03] <- this.M22
+            value[04] <- this.M31; value[05] <- this.M32
             value
 
         /// Convert a Matrix3x2 to an array.
         member this.ToArray (value : single array, offset) =
-            value.[offset+00] <- this.M11; value.[offset+01] <- this.M12
-            value.[offset+02] <- this.M21; value.[offset+03] <- this.M22
-            value.[offset+04] <- this.M31; value.[offset+05] <- this.M32
+            value[offset+00] <- this.M11; value[offset+01] <- this.M12
+            value[offset+02] <- this.M21; value[offset+03] <- this.M22
+            value[offset+04] <- this.M31; value[offset+05] <- this.M32
 
     let inline m3x2 (r0 : Vector2) (r1 : Vector2) (r2 : Vector2) =
         Matrix3x2
@@ -1255,6 +1254,12 @@ module Matrix4x4 =
             if not (Matrix4x4.Invert (this, &result)) then failwith "Failed to invert matrix."
             result
 
+        /// The vulkan-flipped value of a matrix.
+        member inline this.Flipped =
+            let mutable result = this
+            result.M22 <- -result.M22 // vulkan clip space has an inverted Y axis compared to the projection matrix produced by CreatePerspectiveFieldOfView
+            result
+
         /// The transposed value of a matrix.
         member inline this.Transposed =
             Matrix4x4.Transpose this
@@ -1268,26 +1273,26 @@ module Matrix4x4 =
         /// Create a matrix from an array of 16 single values.
         static member CreateFromArray (arr : single array) =
             Matrix4x4
-                (arr.[00], arr.[01], arr.[02], arr.[03],
-                 arr.[04], arr.[05], arr.[06], arr.[07],
-                 arr.[08], arr.[09], arr.[10], arr.[11],
-                 arr.[12], arr.[13], arr.[14], arr.[15])
+                (arr[00], arr[01], arr[02], arr[03],
+                 arr[04], arr[05], arr[06], arr[07],
+                 arr[08], arr[09], arr[10], arr[11],
+                 arr[12], arr[13], arr[14], arr[15])
 
         /// Convert a Matrix4x4 to an array.
         member this.ToArray () =
             let value = Array.zeroCreate 16
-            value.[00] <- this.M11; value.[01] <- this.M12; value.[02] <- this.M13; value.[03] <- this.M14
-            value.[04] <- this.M21; value.[05] <- this.M22; value.[06] <- this.M23; value.[07] <- this.M24
-            value.[08] <- this.M31; value.[09] <- this.M32; value.[10] <- this.M33; value.[11] <- this.M34
-            value.[12] <- this.M41; value.[13] <- this.M42; value.[14] <- this.M43; value.[15] <- this.M44
+            value[00] <- this.M11; value[01] <- this.M12; value[02] <- this.M13; value[03] <- this.M14
+            value[04] <- this.M21; value[05] <- this.M22; value[06] <- this.M23; value[07] <- this.M24
+            value[08] <- this.M31; value[09] <- this.M32; value[10] <- this.M33; value[11] <- this.M34
+            value[12] <- this.M41; value[13] <- this.M42; value[14] <- this.M43; value[15] <- this.M44
             value
 
         /// Convert a Matrix4x4 to an array.
         member this.ToArray (value : single array, offset) =
-            value.[offset+00] <- this.M11; value.[offset+01] <- this.M12; value.[offset+02] <- this.M13; value.[offset+03] <- this.M14
-            value.[offset+04] <- this.M21; value.[offset+05] <- this.M22; value.[offset+06] <- this.M23; value.[offset+07] <- this.M24
-            value.[offset+08] <- this.M31; value.[offset+09] <- this.M32; value.[offset+10] <- this.M33; value.[offset+11] <- this.M34
-            value.[offset+12] <- this.M41; value.[offset+13] <- this.M42; value.[offset+14] <- this.M43; value.[offset+15] <- this.M44
+            value[offset+00] <- this.M11; value[offset+01] <- this.M12; value[offset+02] <- this.M13; value[offset+03] <- this.M14
+            value[offset+04] <- this.M21; value[offset+05] <- this.M22; value[offset+06] <- this.M23; value[offset+07] <- this.M24
+            value[offset+08] <- this.M31; value[offset+09] <- this.M32; value[offset+10] <- this.M33; value[offset+11] <- this.M34
+            value[offset+12] <- this.M41; value[offset+13] <- this.M42; value[offset+14] <- this.M43; value[offset+15] <- this.M44
 
     let inline m4 (r0 : Vector4) (r1 : Vector4) (r2 : Vector4) (r3 : Vector4) =
         Matrix4x4
@@ -1712,6 +1717,35 @@ module Math =
             [|segment|]
         else [||]
 
+    /// Check that a is aligned on b.
+    let Aligned (a, b) =
+        if a = b then true
+        elif a > b then a % b = 0
+        else b % a = 0
+
+    /// Compute the size of the stride.
+    let Stride (alignment, size) =
+        if size = 0 then size // just to prevent division by 0; size should be > 0
+        elif alignment = 0 then size
+        elif alignment = size then size
+        elif size > alignment && size % alignment = 0 then size
+        elif alignment % size = 0 then size
+        else (size / alignment + 1) * alignment // stride = lowest multiple of alignment that contains size
+
+    /// Compute the alignment offset.
+    let AlignOffset (offset, alignment) =
+        if alignment = 0 then offset // no alignment
+        elif offset = 0 then offset // no offset to align
+        elif Aligned (offset, alignment) then offset // offset already aligned
+        else (offset / alignment + 1) * alignment // offset shifted forward to align
+
+    /// Compute the minimum buffer size.
+    /// TODO: find a more general name for this.
+    let MinimumBufferSize (offset, alignment, size, count) =
+        let stride = Stride (alignment, size)
+        let offset = AlignOffset (offset, alignment)
+        offset + stride * count
+
 [<AutoOpen>]
 module MathOperators =
 
@@ -1741,7 +1775,11 @@ module MathOperators =
 
 namespace Nu
 open System
+open System.Numerics
 open Prime
+
+/// The single inhabitant type / value for use where unit / () won't suffice, such as for a dictionary key.
+type Unit = Unit
 
 /// The result of an intersection-detecting operation.
 type [<Struct>] Intersection =
@@ -1773,6 +1811,14 @@ type LightType =
     | DirectionalLight of OffsetForwardScalar : single
     | CascadedLight
 
+    member this.IsLocalLight =
+        match this with
+        | PointLight | SpotLight _ -> true
+        | DirectionalLight _ | CascadedLight -> false
+
+    member this.IsGlobalLight =
+        not this.IsLocalLight
+
     /// Convert to an int tag that can be utilized by a shader.
     member this.Enumerate =
         match this with
@@ -1780,6 +1826,12 @@ type LightType =
         | SpotLight _ -> 1
         | DirectionalLight _ -> 2
         | CascadedLight -> 3
+
+    /// Whether the shadows for this light render to a cube map.
+    member this.ShadowsUseCubeMap =
+        match this with
+        | PointLight -> true
+        | SpotLight _ | DirectionalLight _ | CascadedLight -> false
 
     /// Check that the light should shadow interior surfaces with the given shadowIndexInfoOpt information.
     static member shouldShadowInterior lightType =

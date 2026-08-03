@@ -140,8 +140,8 @@ module internal MouseState =
         // update scroll state
         MouseScrollStatePrevious <- MouseScrollStateCurrent
 
-    /// Get the position of the mouse.
-    let internal getPosition () =
+    /// Get the position of the mouse in SDL terms (IE, not accounting for pixel density).
+    let internal getPositionSdl () =
         let mutable x, y = 0.0f, 0.0f
         SDL3.SDL_GetMouseState (&&x, &&y) |> ignore<SDL_MouseButtonFlags>
         v2 x y
@@ -208,33 +208,33 @@ module internal KeyboardState =
     let internal isKeyDown (key : KeyboardKey) =
         match KeyboardStateCurrent with
         | [||] -> false
-        | keyboardState -> keyboardState.[int key]
+        | keyboardState -> keyboardState[int key]
 
     /// Check that the given keyboard key is up.
     let internal isKeyUp (key : KeyboardKey) =
         match KeyboardStateCurrent with
         | [||] -> false
-        | keyboardState -> not keyboardState.[int key]
+        | keyboardState -> not keyboardState[int key]
 
     /// Check that the given keyboard key was just pressed.
     let internal isKeyPressed key =
         match KeyboardStateCurrent with
         | [||] -> false
         | keyboardState ->
-            keyboardState.[int key] &&
+            keyboardState[int key] &&
             match KeyboardStatePrevious with
             | [||] -> false
-            | keyboardState -> not keyboardState.[int key]
+            | keyboardState -> not keyboardState[int key]
 
     /// Check that the given keyboard key was just released.
     let internal isKeyReleased key =
         match KeyboardStateCurrent with
         | [||] -> false
         | keyboardState ->
-            not keyboardState.[int key] &&
+            not keyboardState[int key] &&
             match KeyboardStatePrevious with
             | [||] -> false
-            | keyboardState -> keyboardState.[int key]
+            | keyboardState -> keyboardState[int key]
 
     /// Check that either enter key is down.
     let internal isEnterDown () =
@@ -280,6 +280,10 @@ module internal KeyboardState =
     let internal isShiftUp () =
         not (isShiftDown ())
 
+    /// Check that num lock is active.
+    let internal isNumLocked () =
+        SDL3.SDL_GetModState () &&& SDL_Keymod.SDL_KMOD_NUM <> SDL_Keymod.SDL_KMOD_NONE
+
 /// Exposes the ongoing state of gamepads.
 [<RequireQualifiedAccess>]        
 module GamepadState =
@@ -290,7 +294,7 @@ module GamepadState =
     let internal init () =
         use joysticks = SDL3.SDL_GetJoysticks ()
         // NOTE: we don't have a matching call to SDL3.SDL_CloseJoystick, but it may not be necessary
-        Joysticks <- Array.init joysticks.Count (fun i -> SDL3.SDL_OpenJoystick joysticks.[i])
+        Joysticks <- Array.init joysticks.Count (fun i -> SDL3.SDL_OpenJoystick joysticks[i])
 
     /// Get the number of open gamepad.
     let internal getGamepadCount () =

@@ -123,13 +123,13 @@ type [<ReferenceEquality>] SdlCursorClient =
         | CursorExtension _ ->
             let filePathSdl = PathF.GetFullPath asset.FilePath
             let surface = SDL3_image.IMG_Load filePathSdl
-            if not (NativePtr.isNullPtr surface) then
+            if NativePtr.notNullPtr surface then
 
                 // create cursor. hotspot parameters (0, 0) here are overridden by the surface properties
                 // SDL_PROP_SURFACE_HOTSPOT_X_NUMBER and SDL_PROP_SURFACE_HOTSPOT_Y_NUMBER set by Image.Load
                 let cursor = SDL3.SDL_CreateColorCursor (surface, 0, 0)
                 SDL3.SDL_DestroySurface surface // the cursor stores a copy of the frame data, the surface can be destroyed here
-                if not (NativePtr.isNullPtr cursor)
+                if NativePtr.notNullPtr cursor
                 then Some cursor
                 else
                     Log.warn ("Could not create cursor for '" + filePathSdl + "' due to: '" + SDL3.SDL_GetError ())
@@ -152,7 +152,7 @@ type [<ReferenceEquality>] SdlCursorClient =
                 Dictionary.tryFind packageName cursorClient.CursorPackages
                 |> Option.defaultWith (fun () ->
                     let cursorPackage = { Assets = Dictionary StringComparer.Ordinal; PackageState = () }
-                    cursorClient.CursorPackages.[packageName] <- cursorPackage
+                    cursorClient.CursorPackages[packageName] <- cursorPackage
                     cursorPackage)
 
             // keep existing cursors for which a newer one does not exist, free otherwise
@@ -173,7 +173,7 @@ type [<ReferenceEquality>] SdlCursorClient =
                         let lastWriteTime =
                             try DateTimeOffset (File.GetLastWriteTime asset.FilePath)
                             with exn -> Log.warn ("Asset file write time read error due to: " + scstring exn); DateTimeOffset.MinValue.DateTime
-                        cursorPackage.Assets.[asset.AssetTag.AssetName] <- (lastWriteTime, asset, cursorAsset)
+                        cursorPackage.Assets[asset.AssetTag.AssetName] <- (lastWriteTime, asset, cursorAsset)
                     | None -> ()
 
         // handle error case
@@ -195,8 +195,8 @@ type [<ReferenceEquality>] SdlCursorClient =
         | Some cursor -> SDL3.SDL_SetCursor cursor
         | None ->
             let cursor = SDL3.SDL_CreateSystemCursor systemCursor
-            if not (NativePtr.isNullPtr cursor) then
-                cursorClient.SystemCursors.[systemCursor] <- cursor
+            if NativePtr.notNullPtr cursor then
+                cursorClient.SystemCursors[systemCursor] <- cursor
                 SDL3.SDL_SetCursor cursor
             else Log.warn ("Failed to create system cursor '" + scstring systemCursor + "' due to: " + SDL3.SDL_GetError ()); true
 

@@ -678,6 +678,7 @@ and EntityDispatcher (is2d, physical, lightProbe, light) =
          Define? PublishUpdates false
          Define? PublishPostUpdates false
          Define? Persistent true
+         Define? OverflowAbsolute false
          Define? PropagatedDescriptorOpt Option<EntityDescriptor>.None]
 
     /// The presence override, if any.
@@ -1143,7 +1144,7 @@ and [<ReferenceEquality; CLIMutable>] ScreenState =
           Name = name }
 
     static member internal makeSentinel (world : World) =
-        ScreenState.make GameTime.zero (Some "@Sentinel") world.WorldExtension.LateBindingsInstances.ScreenDispatchers.[nameof ScreenDispatcher]
+        ScreenState.make GameTime.zero (Some "@Sentinel") world.WorldExtension.LateBindingsInstances.ScreenDispatchers[nameof ScreenDispatcher]
 
     interface SimulantState with
         member this.GetXtension () = this.Xtension
@@ -1203,7 +1204,7 @@ and [<ReferenceEquality; CLIMutable>] GroupState =
           Name = name }
 
     static member internal makeSentinel (world : World) =
-        GroupState.make (Some "@Sentinel") world.WorldExtension.LateBindingsInstances.GroupDispatchers.[nameof GroupDispatcher]
+        GroupState.make (Some "@Sentinel") world.WorldExtension.LateBindingsInstances.GroupDispatchers[nameof GroupDispatcher]
 
     interface SimulantState with
         member this.GetXtension () = this.Xtension
@@ -1230,16 +1231,6 @@ and [<ReferenceEquality; CLIMutable>] EntityState =
       Id : uint64
       Surnames : string array }
 
-    member this.PerimeterCenter with get () = this.Transform.PerimeterCenter and set value = this.Transform.PerimeterCenter <- value
-    member this.PerimeterBottom with get () = this.Transform.PerimeterBottom and set value = this.Transform.PerimeterBottom <- value
-    member this.PerimeterBottomLeft with get () = this.Transform.PerimeterBottomLeft and set value = this.Transform.PerimeterBottomLeft <- value
-    member this.PerimeterMin with get () = this.Transform.PerimeterMin and set value = this.Transform.PerimeterMin <- value
-    member this.PerimeterMax with get () = this.Transform.PerimeterMax and set value = this.Transform.PerimeterMax <- value
-    member this.PerimeterCenterLocal = this.PositionLocal + (this.Transform.PerimeterCenter - this.Transform.Position)
-    member this.PerimeterBottomLocal = this.PositionLocal + (this.Transform.PerimeterBottom - this.Transform.Position)
-    member this.PerimeterBottomLeftLocal = this.PositionLocal + (this.Transform.PerimeterBottomLeft - this.Transform.Position)
-    member this.PerimeterMinLocal = this.PositionLocal + (this.Transform.PerimeterMin - this.Transform.Position)
-    member this.PerimeterMaxLocal = this.PositionLocal + (this.Transform.PerimeterMax - this.Transform.Position)
     member this.Position with get () = this.Transform.Position and set value = this.Transform.Position <- value
     member this.Rotation with get () = this.Transform.Rotation and set value = this.Transform.Rotation <- value
     member this.Scale with get () = this.Transform.Scale and set value = this.Transform.Scale <- value
@@ -1254,6 +1245,16 @@ and [<ReferenceEquality; CLIMutable>] EntityState =
     member this.AffineMatrix = this.Transform.AffineMatrix
     member this.PerimeterUnscaled with get () = this.Transform.PerimeterUnscaled and set value = this.Transform.PerimeterUnscaled <- value
     member this.Perimeter with get () = this.Transform.Perimeter and set value = this.Transform.Perimeter <- value
+    member this.PerimeterCenter with get () = this.Transform.PerimeterCenter and set value = this.Transform.PerimeterCenter <- value
+    member this.PerimeterBottom with get () = this.Transform.PerimeterBottom and set value = this.Transform.PerimeterBottom <- value
+    member this.PerimeterBottomLeft with get () = this.Transform.PerimeterBottomLeft and set value = this.Transform.PerimeterBottomLeft <- value
+    member this.PerimeterMin with get () = this.Transform.PerimeterMin and set value = this.Transform.PerimeterMin <- value
+    member this.PerimeterMax with get () = this.Transform.PerimeterMax and set value = this.Transform.PerimeterMax <- value
+    member this.PerimeterCenterLocal = this.PositionLocal + (this.Transform.PerimeterCenter - this.Transform.Position)
+    member this.PerimeterBottomLocal = this.PositionLocal + (this.Transform.PerimeterBottom - this.Transform.Position)
+    member this.PerimeterBottomLeftLocal = this.PositionLocal + (this.Transform.PerimeterBottomLeft - this.Transform.Position)
+    member this.PerimeterMinLocal = this.PositionLocal + (this.Transform.PerimeterMin - this.Transform.Position)
+    member this.PerimeterMaxLocal = this.PositionLocal + (this.Transform.PerimeterMax - this.Transform.Position)
     member this.Bounds = if this.Is2d then this.Transform.Bounds2d else this.Transform.Bounds3d
     member internal this.Active with get () = this.Transform.Active and set value = this.Transform.Active <- value
     member internal this.Dirty with get () = this.Transform.Dirty and set value = this.Transform.Dirty <- value
@@ -1369,7 +1370,7 @@ and [<ReferenceEquality; CLIMutable>] EntityState =
           Surnames = surnames }
 
     static member internal makeSentinel (world : World) =
-        EntityState.make world.Imperative None (Some [|"@Sentinel"|]) None world.WorldExtension.LateBindingsInstances.EntityDispatchers.[nameof EntityDispatcher]
+        EntityState.make world.Imperative None (Some [|"@Sentinel"|]) None world.WorldExtension.LateBindingsInstances.EntityDispatchers[nameof EntityDispatcher]
 
     interface SimulantState with
         member this.GetXtension () = this.Xtension
@@ -1410,7 +1411,7 @@ and [<TypeConverter (typeof<GameConverter>)>] Game (gameAddress : Game Address) 
 
 #if DEBUG
     // check that address is of correct length for a game
-    do if gameAddress.Length <> 1 || gameAddress.Names.[0] <> Constants.Engine.GameName then
+    do if gameAddress.Length <> 1 || gameAddress.Names[0] <> Constants.Engine.GameName then
         failwith "Game address must be length of 1 with name = 'Game'."
 #endif
 
@@ -1503,7 +1504,7 @@ and [<TypeConverter (typeof<ScreenConverter>)>] Screen (screenAddress) =
 
 #if DEBUG
     // check that address is of correct length for a screen
-    do if screenAddress.Length <> 2 || screenAddress.Names.[0] <> Constants.Engine.GameName then
+    do if screenAddress.Length <> 2 || screenAddress.Names[0] <> Constants.Engine.GameName then
         failwith "Screen address must be length of 2 with Game name = 'Game'."
 #endif
 
@@ -1601,7 +1602,7 @@ and [<TypeConverter (typeof<GroupConverter>)>] Group (groupAddress) =
 
 #if DEBUG
     // check that address is of correct length for a group
-    do if groupAddress.Length <> 3 || groupAddress.Names.[0] <> Constants.Engine.GameName then
+    do if groupAddress.Length <> 3 || groupAddress.Names[0] <> Constants.Engine.GameName then
         failwith "Group address must be length of 3 with Game name = 'Game'."
 #endif
 
@@ -1621,7 +1622,7 @@ and [<TypeConverter (typeof<GroupConverter>)>] Group (groupAddress) =
     member this.GroupAddress = groupAddress
 
     /// The containing screen of the group.
-    member this.Screen = let names = this.GroupAddress.Names in Screen (names.[0], names[1])
+    member this.Screen = let names = this.GroupAddress.Names in Screen (names[0], names[1])
 
     /// Get the names of a group.
     member inline this.Names = Address.getNames this.GroupAddress
@@ -1703,7 +1704,7 @@ and [<TypeConverter (typeof<EntityConverter>)>] Entity (entityAddress) =
 
 #if DEBUG
     // check that address is of correct length for an entity
-    do if entityAddress.Length < 4 || entityAddress.Names.[0] <> Constants.Engine.GameName then
+    do if entityAddress.Length < 4 || entityAddress.Names[0] <> Constants.Engine.GameName then
         failwith "Entity address must be length >= 4 with Game name = 'Game'."
 #endif
 
@@ -1726,10 +1727,10 @@ and [<TypeConverter (typeof<EntityConverter>)>] Entity (entityAddress) =
     member this.EntityAddress = entityAddress
 
     /// The containing screen of the entity.
-    member this.Screen = let names = this.EntityAddress.Names in Screen (names.[0], names.[1])
+    member this.Screen = let names = this.EntityAddress.Names in Screen (names[0], names[1])
 
     /// The containing group of the entity.
-    member this.Group = let names = this.EntityAddress.Names in Group (names.[0], names.[1], names.[2])
+    member this.Group = let names = this.EntityAddress.Names in Group (names[0], names[1], names[2])
 
     /// The containing parent of the entity.
     member this.Parent =
@@ -1810,7 +1811,7 @@ and EntityDescriptor =
         | None -> { descriptor with EntityProperties = Map.remove Constants.Engine.NamePropertyName descriptor.EntityProperties }
 
     /// The empty entity descriptor.
-    static member empty =
+    static member val empty =
         { EntityDispatcherName = String.Empty
           EntityProperties = Map.empty
           EntityDescriptors  = [] }
@@ -1829,7 +1830,7 @@ and GroupDescriptor =
         |> Option.map symbolToValue<string>
 
     /// The empty group descriptor.
-    static member empty =
+    static member val empty =
         { GroupDispatcherName = String.Empty
           GroupProperties = Map.empty
           EntityDescriptors = [] }
@@ -1848,7 +1849,7 @@ and ScreenDescriptor =
         |> Option.map symbolToValue<string>
 
     /// The empty screen descriptor.
-    static member empty =
+    static member val empty =
         { ScreenDispatcherName = String.Empty
           ScreenProperties = Map.empty
           GroupDescriptors = [] }
@@ -1867,20 +1868,20 @@ and GameDescriptor =
         |> Option.map symbolToValue<string>
 
     /// The empty game descriptor.
-    static member empty =
+    static member val empty =
         { GameDispatcherName = String.Empty
           GameProperties = Map.empty
           ScreenDescriptors = [] }
 
 /// Provides simulant bookkeeping information with the ImSim API.
-and [<NoEquality; NoComparison>] internal SimulantImSim =
+and [<NoEquality; NoComparison>] internal SimulantJournal =
     { mutable SimulantInitializing : bool
       mutable SimulantUtilized : bool
       InitializationTime : int64
       Result : obj }
 
 /// Provides subscription bookkeeping information with the ImSim API.
-and [<NoEquality; NoComparison>] internal SubscriptionImSim =
+and [<NoEquality; NoComparison>] internal SubscriptionJournal =
     { mutable SubscriptionUtilized : bool
       SubscriptionId : uint64
       Results : obj }
@@ -1921,8 +1922,8 @@ and [<ReferenceEquality>] internal WorldExtension =
     { // cache line 1 (assuming 16 byte header)
       mutable ContextImSim : Address
       mutable DeclaredImSim : Address
-      mutable SimulantsImSim : SUMap<Address, SimulantImSim>
-      mutable SubscriptionsImSim : SUMap<string * Address * Address, SubscriptionImSim>
+      mutable SimulantJournals : SUMap<Address, SimulantJournal>
+      mutable SubscriptionJournals : SUMap<string * Address * Address, SubscriptionJournal>
       JobGraph : JobGraph
       GeometryViewport : Viewport
 
@@ -2140,8 +2141,8 @@ and [<NoEquality; NoComparison>] World =
 
     /// Check that the current ImSim context is initializing this frame.
     member this.ContextInitializing =
-        match this.WorldExtension.SimulantsImSim.TryGetValue this.WorldExtension.ContextImSim with
-        | (true, simulantImSim) -> simulantImSim.SimulantInitializing
+        match this.WorldExtension.SimulantJournals.TryGetValue this.WorldExtension.ContextImSim with
+        | (true, simulantJournal) -> simulantJournal.SimulantInitializing
         | (false, _) -> false
 
     /// Get the recent ImSim declaration.
@@ -2178,15 +2179,15 @@ and [<NoEquality; NoComparison>] World =
 
     /// Check that the recent ImSim declaration is initializing this frame.
     member this.DeclaredInitializing =
-        match this.WorldExtension.SimulantsImSim.TryGetValue this.WorldExtension.DeclaredImSim with
-        | (true, simulantImSim) -> simulantImSim.SimulantInitializing
+        match this.WorldExtension.SimulantJournals.TryGetValue this.WorldExtension.DeclaredImSim with
+        | (true, simulantJournal) -> simulantJournal.SimulantInitializing
         | (false, _) -> false
 
-    member internal this.SimulantsImSim =
-        this.WorldExtension.SimulantsImSim
+    member internal this.SimulantJournals =
+        this.WorldExtension.SimulantJournals
 
-    member internal this.SubscriptionsImSim =
-        this.WorldExtension.SubscriptionsImSim
+    member internal this.SubscriptionJournals =
+        this.WorldExtension.SubscriptionJournals
 
     /// Get the currently selected screen, if any.
     member this.SelectedScreenOpt =

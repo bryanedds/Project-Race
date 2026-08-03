@@ -87,7 +87,7 @@ module WorldModuleScreen =
 
         static member internal publishScreenChange (propertyName : string) (propertyPrevious : obj) (propertyValue : obj) (screen : Screen) world =
             let changeData = { Name = propertyName; Previous = propertyPrevious; Value = propertyValue }
-            let changeEventAddress = rtoa<ChangeData> [|Constants.Lens.ChangeName; propertyName; Constants.Lens.EventName; screen.Names.[0]; screen.Names.[1]|]
+            let changeEventAddress = rtoa<ChangeData> [|Constants.Lens.ChangeName; propertyName; Constants.Lens.EventName; screen.Names[0]; screen.Names[1]|]
             let eventTrace = EventTrace.debug "World" "publishScreenChange" "" EventTrace.empty
             World.publishPlus changeData changeEventAddress eventTrace screen false false world
 
@@ -281,7 +281,7 @@ module WorldModuleScreen =
                 match valueObj with
                 | :? 'a -> Some valueObj
                 | null -> null :> obj |> Some
-                | valueObj ->
+                | _ ->
                     let valueObj =
                         try valueObj |> valueToSymbol |> symbolToValue<'a> :> obj
                         with _ ->
@@ -302,7 +302,7 @@ module WorldModuleScreen =
                         | DefineExpr valueObj -> valueObj
                         | VariableExpr eval -> eval world
                         | ComputedExpr property -> property.ComputedGet screen world
-                    | None -> failwithumf ()
+                    | None -> failwith ("Screen property '" + propertyName + "' not found on '" + scstring screen + "' (sentinel properties are only supported by Entities).")
                 let property = { PropertyType = typeof<'a>; PropertyValue = valueObj }
                 screenState.Xtension <- Xtension.attachProperty propertyName property screenState.Xtension
                 Some valueObj

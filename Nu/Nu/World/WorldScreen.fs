@@ -205,7 +205,7 @@ module WorldScreenModule =
                 let groups = World.getGroups screen world
                 World.unregisterScreen screen world
                 World.removeTasklets screen world
-                World.removeSimulantImSim screen world
+                World.removeSimulantJournal screen world
                 World.destroyGroupsImmediate groups world
                 World.removeScreenState screen world
 
@@ -362,7 +362,7 @@ module WorldScreenModule =
                         | ValueSome physicallyBasedModel ->
                             if surfaceIndex >= 0 && surfaceIndex < physicallyBasedModel.Surfaces.Length then
                                 if bounds.Size.Magnitude < Constants.Nav.Bounds3dMagnitudeMax then
-                                    Choice2Of3 (bounds, affineMatrix, physicallyBasedModel.Surfaces.[surfaceIndex])
+                                    Choice2Of3 (bounds, affineMatrix, physicallyBasedModel.Surfaces[surfaceIndex])
                                 else
                                     Log.warn "Navigation shape bounds magnitude exceeded maximum; ignoring."
                         | ValueNone -> ()
@@ -411,7 +411,7 @@ module WorldScreenModule =
                                 match boundsOpt with
                                 | None -> boundsOpt <- Some bounds
                                 | Some (bounds' : Box3) -> boundsOpt <- Some (bounds'.Combine bounds)
-                                if geometry.PrimitiveType = OpenGL.PrimitiveType.Triangles then
+                                if geometry.PrimitiveTopology = Vortice.Vulkan.Vulkan.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST then
                                     for v in geometry.Vertices do
                                         let v' = v.Transform affineMatrix
                                         v'.X; v'.Y; v'.Z
@@ -454,7 +454,7 @@ module WorldScreenModule =
                                 offset <- offset + 8
                             | Choice2Of3 (_, _, surface) ->
                                 let geometry = surface.PhysicallyBasedGeometry
-                                if geometry.PrimitiveType = OpenGL.PrimitiveType.Triangles then
+                                if geometry.PrimitiveTopology = Vortice.Vulkan.Vulkan.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST then
                                     for i in geometry.Indices do
                                         yield offset + i
                                 offset <- offset + geometry.Vertices.Length
@@ -619,7 +619,7 @@ module WorldScreenModule =
                     let mutable travel = 0.0f
                     let mutable step = RcVec3f.Zero
                     while pathIndex < pathCount && travel < moveSpeed do
-                        let substep = path.[pathIndex] - startPosition
+                        let substep = path[pathIndex] - startPosition
                         let substepTrunc =
                             if travel + substep.Length () > moveSpeed then
                                 let travelOver = travel + substep.Length () - moveSpeed

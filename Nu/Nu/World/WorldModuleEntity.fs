@@ -140,7 +140,7 @@ module WorldModuleEntity =
             let entityStates = SUMap.remove entity world.EntityStates
             world.WorldState <- { world.WorldState with Simulants = simulants; EntityStates = entityStates }
 
-        static member private entityStateSetter entityState (entity : Entity) (world : World) =
+        static member internal entityStateSetter entityState (entity : Entity) (world : World) =
 #if DEBUG
             if not (SUMap.containsKey entity world.EntityStates) then
                 failwith ("Cannot set the state of a non-existent entity '" + scstring entity + "'")
@@ -331,16 +331,6 @@ module WorldModuleEntity =
 
         static member internal getEntityDispatcher entity world = (World.getEntityState entity world).Dispatcher
         static member internal getEntityFacets entity world = (World.getEntityState entity world).Facets
-        static member internal getEntityPerimeterCenter entity world = (World.getEntityState entity world).Transform.PerimeterCenter
-        static member internal getEntityPerimeterBottom entity world = (World.getEntityState entity world).Transform.PerimeterBottom
-        static member internal getEntityPerimeterBottomLeft entity world = (World.getEntityState entity world).Transform.PerimeterBottomLeft
-        static member internal getEntityPerimeterMin entity world = (World.getEntityState entity world).Transform.PerimeterMin
-        static member internal getEntityPerimeterMax entity world = (World.getEntityState entity world).Transform.PerimeterMax
-        static member internal getEntityPerimeterCenterLocal entity world = (World.getEntityState entity world).PerimeterCenterLocal
-        static member internal getEntityPerimeterBottomLocal entity world = (World.getEntityState entity world).PerimeterBottomLocal
-        static member internal getEntityPerimeterBottomLeftLocal entity world = (World.getEntityState entity world).PerimeterBottomLeftLocal
-        static member internal getEntityPerimeterMinLocal entity world = (World.getEntityState entity world).PerimeterMinLocal
-        static member internal getEntityPerimeterMaxLocal entity world = (World.getEntityState entity world).PerimeterMaxLocal
         static member internal getEntityPosition entity world = (World.getEntityState entity world).Position
         static member internal getEntityPositionLocal entity world = (World.getEntityState entity world).PositionLocal
         static member internal getEntityRotation entity world = (World.getEntityState entity world).Rotation
@@ -356,6 +346,16 @@ module WorldModuleEntity =
         static member internal getEntityElevation entity world = (World.getEntityState entity world).Elevation
         static member internal getEntityElevationLocal entity world = (World.getEntityState entity world).ElevationLocal
         static member internal getEntityOverflow entity world = (World.getEntityState entity world).Transform.Overflow
+        static member internal getEntityPerimeterCenter entity world = (World.getEntityState entity world).Transform.PerimeterCenter
+        static member internal getEntityPerimeterBottom entity world = (World.getEntityState entity world).Transform.PerimeterBottom
+        static member internal getEntityPerimeterBottomLeft entity world = (World.getEntityState entity world).Transform.PerimeterBottomLeft
+        static member internal getEntityPerimeterMin entity world = (World.getEntityState entity world).Transform.PerimeterMin
+        static member internal getEntityPerimeterMax entity world = (World.getEntityState entity world).Transform.PerimeterMax
+        static member internal getEntityPerimeterCenterLocal entity world = (World.getEntityState entity world).PerimeterCenterLocal
+        static member internal getEntityPerimeterBottomLocal entity world = (World.getEntityState entity world).PerimeterBottomLocal
+        static member internal getEntityPerimeterBottomLeftLocal entity world = (World.getEntityState entity world).PerimeterBottomLeftLocal
+        static member internal getEntityPerimeterMinLocal entity world = (World.getEntityState entity world).PerimeterMinLocal
+        static member internal getEntityPerimeterMaxLocal entity world = (World.getEntityState entity world).PerimeterMaxLocal
         static member internal getEntityProtection entity world = (World.getEntityState entity world).Protection
         static member internal getEntityPresence entity world = (World.getEntityState entity world).Presence
         static member internal getEntityPresenceOverride entity world = (World.getEntityState entity world).PresenceOverride
@@ -1793,7 +1793,7 @@ module WorldModuleEntity =
                 match valueObj with
                 | :? 'a -> Some valueObj
                 | null -> null :> obj |> Some
-                | valueObj ->
+                | _ ->
                     let valueObj =
                         try valueObj |> valueToSymbol |> symbolToValue<'a> :> obj
                         with _ ->
@@ -2125,16 +2125,26 @@ module WorldModuleEntity =
             world.WorldState <- { world.WorldState with EntitiesIndexed = entitiesIndexed }
 
         static member internal registerEntity entity world =
+
+            // register facets, both regular registration and physics
             let facets = World.getEntityFacets entity world
             for facet in facets do
-                World.registerEntityIndex (getType facet) entity world
                 facet.Register (entity, world)
-                if WorldModuleInternal.getSelected entity world then facet.RegisterPhysics (entity, world)
+                if WorldModuleInternal.getSelected entity world then
+                    facet.RegisterPhysics (entity, world)
+                World.registerEntityIndex (getType facet) entity world
+
+            // register dispatcher, both regular registration and physics
             let dispatcher = World.getEntityDispatcher entity world : EntityDispatcher
-            dispatcher.RegisterPhysics (entity, world)
-            World.registerEntityIndex (getType dispatcher) entity world
             dispatcher.Register (entity, world)
+            if WorldModuleInternal.getSelected entity world then
+                dispatcher.RegisterPhysics (entity, world)
+            World.registerEntityIndex (getType dispatcher) entity world
+
+            // update bookkeeping
             World.updateEntityPublishUpdateFlag entity world |> ignore<bool>
+
+            // publish related events
             let eventTrace = EventTrace.debug "World" "registerEntity" "Register" EventTrace.empty
             let eventAddresses = EventGraph.getEventAddresses1 (Events.RegisterEvent --> entity)
             for eventAddress in eventAddresses do
@@ -2143,22 +2153,29 @@ module WorldModuleEntity =
             World.publishPlus (RegisterData entity) (Events.LifeCycleEvent (nameof Entity) --> Nu.Game.Handle) eventTrace entity false false world
 
         static member internal unregisterEntity (entity : Entity) world =
+
+            // publish related events
             let eventTrace = EventTrace.debug "World" "unregisterEntity" "LifeCycle" EventTrace.empty
             World.publishPlus (UnregisteringData entity) (Events.LifeCycleEvent (nameof Entity) --> Nu.Game.Handle) eventTrace entity false false world
             let eventTrace = EventTrace.debug "World" "unregister" "Unregistering" EventTrace.empty
             let eventAddresses = EventGraph.getEventAddresses1 (Events.UnregisteringEvent --> entity)
             for eventAddress in eventAddresses do
                 World.publishPlus () eventAddress eventTrace entity false false world
+
+            // unregister facets, both regular unregistration and physics
             let facets = World.getEntityFacets entity world
             for facet in facets do
+                World.unregisterEntityIndex (getType facet) entity world
                 facet.Unregister (entity, world)
                 if WorldModuleInternal.getSelected entity world then
                     facet.UnregisterPhysics (entity, world)
-                World.unregisterEntityIndex (getType facet) entity world
+
+            // unregister dispatcher, both regular unregistration and physics
             let dispatcher = World.getEntityDispatcher entity world : EntityDispatcher
-            dispatcher.Unregister (entity, world)
-            dispatcher.UnregisterPhysics (entity, world)
             World.unregisterEntityIndex (getType dispatcher) entity world
+            dispatcher.Unregister (entity, world)
+            if WorldModuleInternal.getSelected entity world then
+                dispatcher.UnregisterPhysics (entity, world)
 
         static member internal registerEntityPhysics entity world =
             let facets = World.getEntityFacets entity world
@@ -2238,8 +2255,8 @@ module WorldModuleEntity =
                 // destroy any scheduled tasklets
                 World.removeTasklets entity world
 
-                // remove from simulant imsim tracking
-                World.removeSimulantImSim entity world
+                // remove ImSim journal
+                World.removeSimulantJournal entity world
 
                 // mutate respective entity tree if entity is selected
                 if WorldModuleInternal.getSelected entity world then
@@ -2716,16 +2733,6 @@ module WorldModuleEntity =
                 [("Dispatcher", fun entity world -> { PropertyType = typeof<EntityDispatcher>; PropertyValue = World.getEntityDispatcher entity world })
                  ("Facets", fun entity world -> { PropertyType = typeof<Facet array>; PropertyValue = World.getEntityFacets entity world })
                  ("Transform", fun entity world -> { PropertyType = typeof<Transform>; PropertyValue = (World.getEntityState entity world).Transform })
-                 ("PerimeterCenter", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterCenter entity world })
-                 ("PerimeterBottom", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterBottom entity world })
-                 ("PerimeterBottomLeft", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterBottomLeft entity world })
-                 ("PerimeterMin", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterMin entity world })
-                 ("PerimeterMax", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterMax entity world })
-                 ("PerimeterCenterLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterCenterLocal entity world })
-                 ("PerimeterBottomLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterBottomLocal entity world })
-                 ("PerimeterBottomLeftLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterBottomLeftLocal entity world })
-                 ("PerimeterMinLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterMinLocal entity world })
-                 ("PerimeterMaxLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterMaxLocal entity world })
                  ("Position", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPosition entity world })
                  ("PositionLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPositionLocal entity world })
                  ("Rotation", fun entity world -> { PropertyType = typeof<Quaternion>; PropertyValue = World.getEntityRotation entity world })
@@ -2743,6 +2750,16 @@ module WorldModuleEntity =
                  ("Overflow", fun entity world -> { PropertyType = typeof<single>; PropertyValue = World.getEntityOverflow entity world })
                  ("PerimeterUnscaled", fun entity world -> { PropertyType = typeof<Box3>; PropertyValue = World.getEntityPerimeterUnscaled entity world })
                  ("Perimeter", fun entity world -> { PropertyType = typeof<Box3>; PropertyValue = World.getEntityPerimeter entity world })
+                 ("PerimeterCenter", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterCenter entity world })
+                 ("PerimeterBottom", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterBottom entity world })
+                 ("PerimeterBottomLeft", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterBottomLeft entity world })
+                 ("PerimeterMin", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterMin entity world })
+                 ("PerimeterMax", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterMax entity world })
+                 ("PerimeterCenterLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterCenterLocal entity world })
+                 ("PerimeterBottomLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterBottomLocal entity world })
+                 ("PerimeterBottomLeftLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterBottomLeftLocal entity world })
+                 ("PerimeterMinLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterMinLocal entity world })
+                 ("PerimeterMaxLocal", fun entity world -> { PropertyType = typeof<Vector3>; PropertyValue = World.getEntityPerimeterMaxLocal entity world })
                  ("Bounds", fun entity world -> { PropertyType = typeof<Box3>; PropertyValue = World.getEntityBounds entity world })
                  ("Protection", fun entity world -> { PropertyType = typeof<Protection>; PropertyValue = World.getEntityProtection entity world })
                  ("Presence", fun entity world -> { PropertyType = typeof<Presence>; PropertyValue = World.getEntityPresence entity world })
@@ -2786,16 +2803,6 @@ module WorldModuleEntity =
         let entitySetters =
             dictPlus StringComparer.Ordinal
                 [("Transform", fun property entity world -> let mutable transform = property.PropertyValue :?> Transform in World.setEntityTransformByRef (&transform, World.getEntityState entity world, entity, world))
-                 ("PerimeterCenter", fun property entity world -> World.setEntityPerimeterCenter (property.PropertyValue :?> Vector3) entity world)
-                 ("PerimeterBottom", fun property entity world -> World.setEntityPerimeterBottom (property.PropertyValue :?> Vector3) entity world)
-                 ("PerimeterBottomLeft", fun property entity world -> World.setEntityPerimeterBottomLeft (property.PropertyValue :?> Vector3) entity world)
-                 ("PerimeterMin", fun property entity world -> World.setEntityPerimeterMin (property.PropertyValue :?> Vector3) entity world)
-                 ("PerimeterMax", fun property entity world -> World.setEntityPerimeterMax (property.PropertyValue :?> Vector3) entity world)
-                 ("PerimeterCenterLocal", fun property entity world -> World.setEntityPerimeterCenterLocal (property.PropertyValue :?> Vector3) entity world)
-                 ("PerimeterBottomLocal", fun property entity world -> World.setEntityPerimeterBottomLocal (property.PropertyValue :?> Vector3) entity world)
-                 ("PerimeterBottomLeftLocal", fun property entity world -> World.setEntityPerimeterBottomLeftLocal (property.PropertyValue :?> Vector3) entity world)
-                 ("PerimeterMinLocal", fun property entity world -> World.setEntityPerimeterMinLocal (property.PropertyValue :?> Vector3) entity world)
-                 ("PerimeterMaxLocal", fun property entity world -> World.setEntityPerimeterMaxLocal (property.PropertyValue :?> Vector3) entity world)
                  ("Position", fun property entity world -> World.setEntityPosition (property.PropertyValue :?> Vector3) entity world)
                  ("PositionLocal", fun property entity world -> World.setEntityPositionLocal (property.PropertyValue :?> Vector3) entity world)
                  ("Rotation", fun property entity world -> World.setEntityRotation (property.PropertyValue :?> Quaternion) entity world)
@@ -2813,6 +2820,16 @@ module WorldModuleEntity =
                  ("Overflow", fun property entity world -> World.setEntityOverflow (property.PropertyValue :?> single) entity world)
                  ("PerimeterUnscaled", fun property entity world -> World.setEntityPerimeterUnscaled (property.PropertyValue :?> Box3) entity world)
                  ("Perimeter", fun property entity world -> World.setEntityPerimeter (property.PropertyValue :?> Box3) entity world)
+                 ("PerimeterCenter", fun property entity world -> World.setEntityPerimeterCenter (property.PropertyValue :?> Vector3) entity world)
+                 ("PerimeterBottom", fun property entity world -> World.setEntityPerimeterBottom (property.PropertyValue :?> Vector3) entity world)
+                 ("PerimeterBottomLeft", fun property entity world -> World.setEntityPerimeterBottomLeft (property.PropertyValue :?> Vector3) entity world)
+                 ("PerimeterMin", fun property entity world -> World.setEntityPerimeterMin (property.PropertyValue :?> Vector3) entity world)
+                 ("PerimeterMax", fun property entity world -> World.setEntityPerimeterMax (property.PropertyValue :?> Vector3) entity world)
+                 ("PerimeterCenterLocal", fun property entity world -> World.setEntityPerimeterCenterLocal (property.PropertyValue :?> Vector3) entity world)
+                 ("PerimeterBottomLocal", fun property entity world -> World.setEntityPerimeterBottomLocal (property.PropertyValue :?> Vector3) entity world)
+                 ("PerimeterBottomLeftLocal", fun property entity world -> World.setEntityPerimeterBottomLeftLocal (property.PropertyValue :?> Vector3) entity world)
+                 ("PerimeterMinLocal", fun property entity world -> World.setEntityPerimeterMinLocal (property.PropertyValue :?> Vector3) entity world)
+                 ("PerimeterMaxLocal", fun property entity world -> World.setEntityPerimeterMaxLocal (property.PropertyValue :?> Vector3) entity world)
                  ("Protection", fun property entity world -> World.setEntityProtection (property.PropertyValue :?> Protection) entity world)
                  ("Presence", fun property entity world -> World.setEntityPresence (property.PropertyValue :?> Presence) entity world)
                  ("Absolute", fun property entity world -> World.setEntityAbsolute (property.PropertyValue :?> bool) entity world)

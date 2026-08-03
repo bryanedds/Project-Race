@@ -26,10 +26,13 @@ module WorldInputModule =
 
         /// Get the position of the mouse.
         static member getMousePosition (world : World) =
-            let viewport = world.WindowViewport
-            let offset = viewport.Bounds.Min
-            let margin = v2 (single offset.X) (single offset.Y)
-            MouseState.getPosition () - margin
+            match World.tryGetWindowPixelDensity world with
+            | Some pixelDensity ->
+                let viewport = world.WindowViewport
+                let offset = viewport.Bounds.Min
+                let margin = v2 (single offset.X) (single offset.Y)
+                MouseState.getPositionSdl () * pixelDensity - margin
+            | None -> v2Zero
 
         /// Get the 2d inset position of the mouse.
         static member getMousePosition2dInset (world : World) =
@@ -200,6 +203,11 @@ module WorldInputModule =
         static member isKeyboardShiftUp world =
             ignore (world : World)
             KeyboardState.isShiftUp ()
+
+        /// Check that a keyboard's num lock is active.
+        static member isKeyboardNumLocked world =
+            ignore (world : World)
+            KeyboardState.isNumLocked ()
 
         /// Get the number of open gamepad.
         static member getGamepadCount world =

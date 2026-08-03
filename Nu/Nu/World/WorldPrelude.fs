@@ -69,17 +69,6 @@ type TileMapDescriptor =
       TileMapSizeF : Vector2
       TileMapPosition : Vector2 }
 
-/// Describes a Spine animation for a given track.
-type [<DefaultValue "[idle Loop]">] SpineAnimation =
-    { SpineAnimationName : string
-      SpineAnimationPlayback : Playback }
-
-/// Represents the mutable backing state of an animating Spine skeleton.
-/// NOTE: this is inherently imperative and therefore currently unsupported by undo / redo.
-type SpineSkeletonState =
-    { SpineSkeleton : Spine.Skeleton
-      SpineAnimationState : Spine.AnimationState }
-
 /// The timing with which an effect should be evaluated in a frame.
 type RunMode =
     | RunEarly
@@ -167,9 +156,9 @@ type [<SymbolicExpansion>] NavBuilderResultData =
         let interiorEdges =
             [|for i in 0 .. dec dmesh.nmeshes do
                 let m = i * 4
-                let bverts = dmesh.meshes.[m]
-                let btris = dmesh.meshes.[m + 2]
-                let ntris = dmesh.meshes.[m + 3]
+                let bverts = dmesh.meshes[m]
+                let btris = dmesh.meshes[m + 2]
+                let ntris = dmesh.meshes[m + 3]
                 let verts = bverts * 3
                 let tris = btris * 4
                 for j in 0 .. dec ntris do
@@ -177,18 +166,18 @@ type [<SymbolicExpansion>] NavBuilderResultData =
                     let mutable k = 0
                     let mutable kp = 2
                     while k < 3 do
-                        let ef = (dmesh.tris.[t + 3] >>> (kp * 2)) &&& 0x3
+                        let ef = (dmesh.tris[t + 3] >>> (kp * 2)) &&& 0x3
                         if ef = 0 then
                             let start =
                                 v3
-                                    dmesh.verts.[verts + dmesh.tris.[t + kp] * 3]
-                                    dmesh.verts.[verts + dmesh.tris.[t + kp] * 3 + 1]
-                                    dmesh.verts.[verts + dmesh.tris.[t + kp] * 3 + 2]
+                                    dmesh.verts[verts + dmesh.tris[t + kp] * 3]
+                                    dmesh.verts[verts + dmesh.tris[t + kp] * 3 + 1]
+                                    dmesh.verts[verts + dmesh.tris[t + kp] * 3 + 2]
                             let stop =
                                 v3
-                                    dmesh.verts.[verts + dmesh.tris.[t + k] * 3]
-                                    dmesh.verts.[verts + dmesh.tris.[t + k] * 3 + 1]
-                                    dmesh.verts.[verts + dmesh.tris.[t + k] * 3 + 2]
+                                    dmesh.verts[verts + dmesh.tris[t + k] * 3]
+                                    dmesh.verts[verts + dmesh.tris[t + k] * 3 + 1]
+                                    dmesh.verts[verts + dmesh.tris[t + k] * 3 + 2]
                             segment3 start stop
                         kp <- k
                         k <- inc k|]
@@ -197,9 +186,9 @@ type [<SymbolicExpansion>] NavBuilderResultData =
         let exteriorEdges =
             [|for i in 0 .. dec dmesh.nmeshes do
                 let m = i * 4
-                let bverts = dmesh.meshes.[m]
-                let btris = dmesh.meshes.[m + 2]
-                let ntris = dmesh.meshes.[m + 3]
+                let bverts = dmesh.meshes[m]
+                let btris = dmesh.meshes[m + 2]
+                let ntris = dmesh.meshes[m + 3]
                 let verts = bverts * 3
                 let tris = btris * 4
                 for j in 0 .. dec ntris do
@@ -207,18 +196,18 @@ type [<SymbolicExpansion>] NavBuilderResultData =
                     let mutable k = 0
                     let mutable kp = 2
                     while k < 3 do
-                        let ef = (dmesh.tris.[t + 3] >>> (kp * 2)) &&& 0x3
+                        let ef = (dmesh.tris[t + 3] >>> (kp * 2)) &&& 0x3
                         if ef <> 0 then
                             let start =
                                 v3
-                                    dmesh.verts.[verts + dmesh.tris.[t + kp] * 3]
-                                    dmesh.verts.[verts + dmesh.tris.[t + kp] * 3 + 1]
-                                    dmesh.verts.[verts + dmesh.tris.[t + kp] * 3 + 2]
+                                    dmesh.verts[verts + dmesh.tris[t + kp] * 3]
+                                    dmesh.verts[verts + dmesh.tris[t + kp] * 3 + 1]
+                                    dmesh.verts[verts + dmesh.tris[t + kp] * 3 + 2]
                             let stop =
                                 v3
-                                    dmesh.verts.[verts + dmesh.tris.[t + k] * 3]
-                                    dmesh.verts.[verts + dmesh.tris.[t + k] * 3 + 1]
-                                    dmesh.verts.[verts + dmesh.tris.[t + k] * 3 + 2]
+                                    dmesh.verts[verts + dmesh.tris[t + k] * 3]
+                                    dmesh.verts[verts + dmesh.tris[t + k] * 3 + 1]
+                                    dmesh.verts[verts + dmesh.tris[t + k] * 3 + 2]
                             if edgesMinY > start.Y then edgesMinY <- start.Y
                             if edgesMaxY < start.Y then edgesMaxY <- start.Y
                             if edgesMinY > stop.Y then edgesMinY <- stop.Y
@@ -654,6 +643,13 @@ module internal AmbientState =
         | Some window -> Some (SDL3.SDL_GetWindowFlags window)
         | _ -> None
 
+    let internal tryGetWindowPixelDensity state =
+        match Option.flatten (Option.map SdlDeps.getWindowOpt state.SdlDepsOpt) with
+        | Some window ->
+            let pixelDensity = SDL3.SDL_GetWindowPixelDensity window
+            if pixelDensity = 0.0f then Some 1.0f else Some pixelDensity
+        | _ -> None
+
     let internal tryGetWindowMinimized state =
         Option.map (fun flags -> flags &&& SDL_WindowFlags.SDL_WINDOW_MINIMIZED <> LanguagePrimitives.EnumOfValue 0UL) (tryGetWindowFlags state)
 
@@ -662,11 +658,10 @@ module internal AmbientState =
 
     let internal tryGetWindowFullScreen state =
         match Option.flatten (Option.map SdlDeps.getWindowOpt state.SdlDepsOpt) with
-        | Some window ->            
-            let mutable width, height = 0, 0
-            SDL3.SDL_GetWindowSize (window, &&width, &&height) |> ignore
-            let displayMode = SdlDeps.getDesktopDisplayMode ()
-            Some (width = displayMode.w || height = displayMode.h)
+        | Some window ->
+            let flags = SDL3.SDL_GetWindowFlags window
+            let fullScreen = flags &&& SDL_WindowFlags.SDL_WINDOW_FULLSCREEN <> LanguagePrimitives.EnumOfValue 0UL
+            Some fullScreen
         | _ -> None
 
     let internal trySetWindowFullScreen fullScreen state =
@@ -682,28 +677,38 @@ module internal AmbientState =
     let internal tryGetWindowPosition state =
         match Option.flatten (Option.map SdlDeps.getWindowOpt state.SdlDepsOpt) with
         | Some window ->
-            let mutable x, y = 0, 0
-            SDL3.SDL_GetWindowPosition (window, &&x, &&y) |> ignore<SDLBool>
-            Some (v2i x y)
+            let pixelDensity = SDL3.SDL_GetWindowPixelDensity window
+            let mutable (x, y) = (0, 0) in SDL3.SDL_GetWindowPosition (window, &&x, &&y) |> ignore<SDLBool>
+            Some (v2i (int (single x * pixelDensity)) (int (single y * pixelDensity)))
         | _ -> None
 
     let internal trySetWindowPosition (position : Vector2i) state =
         match Option.flatten (Option.map SdlDeps.getWindowOpt state.SdlDepsOpt) with
-        | Some window -> SDL3.SDL_SetWindowPosition (window, position.X, position.Y) |> ignore<SDLBool>
+        | Some window ->
+            let pixelDensity = SDL3.SDL_GetWindowPixelDensity window
+            SDL3.SDL_SetWindowPosition (window, int (single position.X / pixelDensity), int (single position.Y / pixelDensity)) |> ignore<SDLBool>
         | None -> ()
 
     let internal tryGetWindowSize state =
         match Option.flatten (Option.map SdlDeps.getWindowOpt state.SdlDepsOpt) with
         | Some window ->
             let mutable width, height = 0, 0
-            SDL3.SDL_GetWindowSize (window, &&width, &&height) |> ignore<SDLBool>
+            SDL3.SDL_GetWindowSizeInPixels (window, &&width, &&height) |> ignore<SDLBool>
             Some (v2i width height)
         | _ -> None
 
     let internal trySetWindowSize (size : Vector2i) state =
         match Option.flatten (Option.map SdlDeps.getWindowOpt state.SdlDepsOpt) with
-        | Some window -> SDL3.SDL_SetWindowSize (window, size.X, size.Y) |> ignore
+        | Some window ->
+            let pixelDensity = SDL3.SDL_GetWindowPixelDensity window
+            SDL3.SDL_SetWindowSize (window, int (single size.X / pixelDensity), int (single size.Y / pixelDensity)) |> ignore<SDLBool>
+            SDL3.SDL_SyncWindow window |> ignore<SDLBool>
         | None -> ()
+
+    let internal tryGetWindowProperties state =
+        match Option.flatten (Option.map SdlDeps.getWindowOpt state.SdlDepsOpt) with
+        | Some window -> Some (WindowProperties.make window)
+        | _ -> None
 
     let internal getSymbolicsBy by state =
         by state.Symbolics
