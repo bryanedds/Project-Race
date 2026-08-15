@@ -48,14 +48,7 @@ module WorldModule2 =
 
         /// Set whether the world state is advancing.
         static member setAdvancing advancing (world : World) =
-            if world.ContextImSim.Names.Length = 0 then
-                World.defer (World.mapAmbientState (AmbientState.setAdvancing advancing)) Nu.Game.Handle world
-            else
-
-                // HACK: in order to avoid unintentional interaction with the ImSim hack that clears and restores
-                // advancement state ImSim contexts, we schedule the advancement change outside of the normal workflow.
-                let time = if WorldModuleInternal.EndFrameProcessingStarted && world.Advancing then GameTime.epsilon else GameTime.zero
-                World.addTasklet Nu.Game.Handle { ScheduledTime = time; ScheduledOp = World.mapAmbientState (AmbientState.setAdvancing advancing) } world
+            World.mapAmbientState (AmbientState.setAdvancing advancing) world
 
         /// Select the given screen without transitioning, even if another transition is taking place.
         static member internal selectScreenOpt transitionStateAndScreenOpt world =
@@ -182,7 +175,7 @@ module WorldModule2 =
                         World.setScreenTransitionStatePlus (IdlingState world.GameTime) selectedScreen world
                         World.publishPlus () selectedScreen.IncomingFinishEvent eventTrace selectedScreen false false world
 
-        static member private updateScreenIdling transitionTime (selectedScreen : Screen) (world : World) =
+        static member internal updateScreenIdling transitionTime (selectedScreen : Screen) (world : World) =
             if world.Alive then
                 if world.Accompanied && world.Halted && not world.AdvancementCleared then // special case to play song when halted in editor
                     match (selectedScreen.GetIncoming world).SongOpt with
@@ -197,41 +190,11 @@ module WorldModule2 =
                     // special case it here to pay attention to desired screen when it is a non-slide screen (IE, not
                     // executing a series of slides). Additionally, to keep this hack's implementation self-contained,
                     // we use a special case to quick cut when halted in the editor.
-                    match World.getDesiredScreen world with
-                    | Desire desiredScreen when desiredScreen <> selectedScreen && (desiredScreen.GetSlideOpt world).IsNone ->
-                        World.defer (fun world ->
-                            let transitionTime = world.GameTime
-                            World.selectScreen (IdlingState transitionTime) desiredScreen world
-                            World.updateScreenIdling transitionTime desiredScreen world)
-                            desiredScreen
-                            world
-                    | DesireNone ->
-                        World.selectScreenOpt None world
-                    | _ ->
-                        if World.updateScreenIdling3 transitionTime slide selectedScreen world then
-                            let transitionTime = world.GameTime
-                            World.setScreenTransitionStatePlus (OutgoingState transitionTime) selectedScreen world
-                            World.updateScreenOutgoing transitionTime selectedScreen world
-                | None ->
-                    match World.getDesiredScreen world with
-                    | Desire desiredScreen ->
-                        if desiredScreen <> selectedScreen then
-                            if world.Accompanied && world.Halted && not world.AdvancementCleared then // special case to quick cut when halted in the editor.
-                                World.defer (fun world ->
-                                    let transitionTime = world.GameTime
-                                    World.selectScreen (IdlingState transitionTime) desiredScreen world
-                                    World.updateScreenIdling transitionTime desiredScreen world)
-                                    desiredScreen
-                                    world
-                            else
-                                let transitionTime = world.GameTime
-                                World.setScreenTransitionStatePlus (OutgoingState transitionTime) selectedScreen world
-                                World.updateScreenOutgoing transitionTime selectedScreen world
-                    | DesireNone ->
+                    if World.updateScreenIdling3 transitionTime slide selectedScreen world then
                         let transitionTime = world.GameTime
                         World.setScreenTransitionStatePlus (OutgoingState transitionTime) selectedScreen world
                         World.updateScreenOutgoing transitionTime selectedScreen world
-                    | DesireIgnore -> ()
+                | None -> ()
 
         static member private updateScreenOutgoing transitionTime (selectedScreen : Screen) (world : World) =
             if transitionTime = world.GameTime then
@@ -245,11 +208,7 @@ module WorldModule2 =
                         | None ->
                             match World.getScreenTransitionDestinationOpt world with
                             | Some destination -> Some destination
-                            | None ->
-                                match World.getDesiredScreen world with
-                                | Desire destination -> Some destination
-                                | DesireNone -> None
-                                | DesireIgnore -> None
+                            | None -> None
                     match destinationOpt with
                     | Some destination ->
                         match (incoming.SongOpt, (destination.GetIncoming world).SongOpt) with
@@ -278,26 +237,14 @@ module WorldModule2 =
                             | None ->
                                 match World.getScreenTransitionDestinationOpt world with
                                 | Some destination -> Some destination
-                                | None ->
-                                    match World.getDesiredScreen world with
-                                    | Desire destination -> Some destination
-                                    | DesireNone -> None
-                                    | DesireIgnore -> None
+                                | None -> None
                         match destinationOpt with
                         | Some destination ->
                             if destination <> selectedScreen then
                                 let transitionTime = world.GameTime
                                 World.selectScreen (IncomingState transitionTime) destination world
                                 World.updateScreenIncoming transitionTime destination world
-                        | None ->
-                            World.selectScreenOpt None world
-                            match World.getDesiredScreen world with // handle the possibility that screen deselect event changed destination
-                            | Desire destination ->
-                                let transitionTime = world.GameTime
-                                World.selectScreen (IncomingState transitionTime) destination world
-                                World.updateScreenIncoming transitionTime destination world
-                            | DesireNone -> ()
-                            | DesireIgnore -> ()
+                        | None -> World.selectScreenOpt None world
 
         static member private updateScreenTransition world =
             match World.getSelectedScreenOpt world with
@@ -306,11 +253,7 @@ module WorldModule2 =
                 | IncomingState transitionTime -> World.updateScreenIncoming transitionTime selectedScreen world
                 | IdlingState transitionTime -> World.updateScreenIdling transitionTime selectedScreen world
                 | OutgoingState transitionTime -> World.updateScreenOutgoing transitionTime selectedScreen world
-            | None ->
-                match World.getDesiredScreen world with
-                | Desire desiredScreen -> World.transitionScreen desiredScreen world
-                | DesireNone -> ()
-                | DesireIgnore -> ()
+            | None -> ()
 
         static member private updateScreenRequestedSong world =
             match World.getSelectedScreenOpt world with
@@ -364,7 +307,7 @@ module WorldModule2 =
         static member transitionScreen destination world =
             World.tryTransitionScreen destination world |> ignore<bool>
 
-        static member internal beginScreenPlus10<'d, 'r when 'd :> ScreenDispatcher> (zero : 'r) init transitionScreen setScreenSlide name select behavior groupFilePathOpt (args : Screen ArgImSim seq) (world : World) : SelectionEventData FQueue * 'r =
+        static member internal beginScreenPlus10<'d, 'r when 'd :> ScreenDispatcher> (zero : 'r) init name select behavior groupFilePathOpt (args : Screen ArgImSim seq) (world : World) : SelectionEventData FQueue * 'r =
             Address.assertIdentifierName name
             if world.ContextImSim.Names.Length <> 1 then raise (InvalidOperationException "ImSim screen declared outside of valid ImSim context (must be called in a Game context).")
             let screenAddress = Address.makeFromArray (Array.add name world.ContextImSim.Names)
@@ -416,24 +359,24 @@ module WorldModule2 =
                     | DynamicArg -> true) && screen.GetExists world then
                     screen.TrySetProperty arg.ArgLens.Name { PropertyType = arg.ArgLens.Type; PropertyValue = arg.ArgValue } world |> ignore
             if reinitializing && screen.GetExists world then
-                World.applyScreenBehavior setScreenSlide behavior screen world
+                World.applyScreenBehavior World.setScreenSlide behavior screen world
             if screenCreation && screen.GetExists world then
                 WorldModuleInternal.tryProcessScreen true screen world
             if screen.GetExists world && select && not (Option.contains screen (World.getSelectedScreenOpt world)) then
-                if world.Accompanied && world.Halted && not world.AdvancementCleared then // special case to quick cut when halted in the editor.
+                if world.Accompanied && world.Halted && not world.AdvancementCleared then // special case to quick cut when halted in the editor
                     World.defer (fun world ->
                         let transitionTime = world.GameTime
                         World.selectScreen (IdlingState transitionTime) screen world
                         World.updateScreenIdling transitionTime screen world)
                         screen
                         world
-                else transitionScreen screen world
+                else World.transitionScreen screen world
             let (screenResult, userResult) = (World.getSimulantJournal screen.ScreenAddress world).Result :?> SelectionEventData FQueue * 'r
             World.mapSimulantJournal (fun simulantJournal -> { simulantJournal with Result = (FQueue.empty<SelectionEventData>, zero) }) screen.ScreenAddress world
             (screenResult, userResult)
 
-        static member inline private beginScreen8<'d when 'd :> ScreenDispatcher> transitionScreen setScreenSlide name select behavior groupFilePathOpt args world : SelectionEventData FQueue =
-            World.beginScreenPlus10<'d, unit> () (fun _ _ _ -> ()) transitionScreen setScreenSlide name select behavior groupFilePathOpt args world |> fst
+        static member inline private beginScreen8<'d when 'd :> ScreenDispatcher> name select behavior groupFilePathOpt args world : SelectionEventData FQueue =
+            World.beginScreenPlus10<'d, unit> () (fun _ _ _ -> ()) name select behavior groupFilePathOpt args world |> fst
 
         /// End the ImSim declaration of a screen.
         static member endScreen (world : World) =
@@ -444,48 +387,48 @@ module WorldModule2 =
         /// Begin the ImSim declaration of a screen with the given arguments using a child group read from the given file path.
         /// Note that changing the screen behavior and file path over time has no effect as only the first moment is used.
         static member beginScreenWithGroupFromFilePlus<'d, 'r when 'd :> ScreenDispatcher> (zero : 'r) init name select behavior groupFilePath args world =
-            World.beginScreenPlus10<'d, 'r> zero init World.transitionScreen World.setScreenSlide name select behavior (Some groupFilePath) args world
+            World.beginScreenPlus10<'d, 'r> zero init name select behavior (Some groupFilePath) args world
 
         /// Begin the ImSim declaration of a screen with the given arguments using a child group read from the given file path.
         /// Note that changing the screen behavior and file path over time has no effect as only the first moment is used.
         static member beginScreenWithGroupFromFile<'d when 'd :> ScreenDispatcher> name select behavior groupFilePath args world =
-            World.beginScreen8<'d> World.transitionScreen World.setScreenSlide name select behavior (Some groupFilePath) args world
+            World.beginScreen8<'d> name select behavior (Some groupFilePath) args world
 
         /// Begin the ImSim declaration of a screen with the given arguments.
         /// Note that changing the screen behavior over time has no effect as only the first moment is used.
         static member beginScreenPlus<'d, 'r when 'd :> ScreenDispatcher> zero init name select behavior args world =
-            World.beginScreenPlus10<'d, 'r> zero init World.transitionScreen World.setScreenSlide name select behavior None args world
+            World.beginScreenPlus10<'d, 'r> zero init name select behavior None args world
 
         /// Begin the ImSim declaration of a screen with the given arguments.
         /// Note that changing the screen behavior over time has no effect as only the first moment is used.
         static member beginScreen<'d when 'd :> ScreenDispatcher> name select behavior args world =
-            World.beginScreen8<'d> World.transitionScreen World.setScreenSlide name select behavior None args world
+            World.beginScreen8<'d> name select behavior None args world
 
         /// ImSim declare a screen with the given arguments using a child group read from the given file path.
         /// Note that changing the screen behavior and file path over time has no effect as only the first moment is used.
         static member doScreenWithGroupFromFilePlus<'d, 'r when 'd :> ScreenDispatcher> (zero : 'r) init name select behavior groupFilePath args world =
-            let (result, userResult) = World.beginScreenPlus10<'d, 'r> zero init World.transitionScreen World.setScreenSlide name select behavior (Some groupFilePath) args world
+            let (result, userResult) = World.beginScreenPlus10<'d, 'r> zero init name select behavior (Some groupFilePath) args world
             World.endScreen world
             (result, userResult)
 
         /// ImSim declare a screen with the given arguments using a child group read from the given file path.
         /// Note that changing the screen behavior and file path over time has no effect as only the first moment is used.
         static member doScreenWithGroupFromFile<'d when 'd :> ScreenDispatcher> name select behavior groupFilePath args world =
-            let result = World.beginScreen8<'d> World.transitionScreen World.setScreenSlide name select behavior (Some groupFilePath) args world
+            let result = World.beginScreen8<'d> name select behavior (Some groupFilePath) args world
             World.endScreen world
             result
 
         /// ImSim declare a screen with the given arguments.
         /// Note that changing the screen behavior over time has no effect as only the first moment is used.
         static member doScreenPlus<'d, 'r when 'd :> ScreenDispatcher> zero init name select behavior args world =
-            let (result, userResult) = World.beginScreenPlus10<'d, 'r> zero init World.transitionScreen World.setScreenSlide name select behavior None args world
+            let (result, userResult) = World.beginScreenPlus10<'d, 'r> zero init name select behavior None args world
             World.endScreen world
             (result, userResult)
 
         /// ImSim declare a screen with the given arguments.
         /// Note that changing the screen behavior over time has no effect as only the first moment is used.
         static member doScreen<'d when 'd :> ScreenDispatcher> name select behavior args world =
-            let result = World.beginScreen8<'d> World.transitionScreen World.setScreenSlide name select behavior None args world
+            let result = World.beginScreen8<'d> name select behavior None args world
             World.endScreen world
             result
 
@@ -1127,7 +1070,7 @@ module WorldModule2 =
                 elif keyboardKey >= KeyboardKey.F1 && keyboardKey <= KeyboardKey.F12 then ImGuiKey.F1 + (keyboardKey - KeyboardKey.F1 |> LanguagePrimitives.EnumToValue |> LanguagePrimitives.EnumOfValue) |> List.singleton
                 else []
 
-        static member internal processWindowResized (world : World) =
+        static member internal processWindowResize (world : World) =
 
             // ensure window size is a factor of display virtual resolution, going to full screen otherwise
             let windowSize = World.getWindowSizeOtherwiseViewportSize world
@@ -1155,7 +1098,7 @@ module WorldModule2 =
                 let eventTrace = EventTrace.debug "World" "processInput2" "ExitRequest" EventTrace.empty
                 World.publishPlus () Nu.Game.Handle.ExitRequestEvent eventTrace Nu.Game.Handle true true world
             | SDL_EventType.SDL_EVENT_WINDOW_RESIZED | SDL_EventType.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ->
-                World.processWindowResized world
+                World.processWindowResize world
             | SDL_EventType.SDL_EVENT_MOUSE_MOTION ->
                 let io = ImGui.GetIO ()
                 let pixelDensity = World.tryGetWindowPixelDensity world |> Option.defaultValue 1.0f
@@ -2205,7 +2148,7 @@ module EntityDispatcherModule =
             [define Entity.Size Constants.Engine.Entity2dSizeDefault]
 
     /// An ImSim 2d contour dispatcher.
-    type [<AbstractClass>] Contour2dDispatcher (physical, lightProbe, light) =
+    type [<AbstractClass>] Contour2dDispatcherImSim (physical, lightProbe, light) =
         inherit EntityDispatcherImSim (true, physical, lightProbe, light)
 
         static member Properties =
@@ -2247,7 +2190,7 @@ module EntityDispatcherModule =
 
     type World with
 
-        static member inline internal signalEntity<'model, 'message, 'command when 'message :> Message and 'command :> Command> (signal : Signal) (entity : Entity) world =
+        static member inline signalEntity<'model, 'message, 'command when 'message :> Message and 'command :> Command> (signal : Signal) (entity : Entity) world =
             match entity.GetDispatcher world with
             | :? EntityDispatcher<'model, 'message, 'command> as dispatcher ->
                 Signal.processSignal dispatcher.Message dispatcher.Command (entity.ModelGeneric<'model> ()) signal entity world
@@ -2607,7 +2550,7 @@ module GroupDispatcherModule =
 
     type World with
 
-        static member inline internal signalGroup<'model, 'message, 'command when 'message :> Message and 'command :> Command> signal (group : Group) world =
+        static member inline signalGroup<'model, 'message, 'command when 'message :> Message and 'command :> Command> signal (group : Group) world =
             match group.GetDispatcher world with
             | :? GroupDispatcher<'model, 'message, 'command> as dispatcher ->
                 Signal.processSignal dispatcher.Message dispatcher.Command (group.ModelGeneric<'model> ()) signal group world
@@ -2834,7 +2777,7 @@ module ScreenDispatcherModule =
 
     type World with
 
-        static member inline internal signalScreen<'model, 'message, 'command when 'message :> Message and 'command :> Command> signal (screen : Screen) world =
+        static member inline signalScreen<'model, 'message, 'command when 'message :> Message and 'command :> Command> signal (screen : Screen) world =
             match screen.GetDispatcher world with
             | :? ScreenDispatcher<'model, 'message, 'command> as dispatcher ->
                 Signal.processSignal dispatcher.Message dispatcher.Command (screen.ModelGeneric<'model> ()) signal screen world
@@ -2917,7 +2860,7 @@ module ScreenDispatcherModule =
             let model = this.GetModel screen world
             let definitions = this.Definitions (model, screen)
             let groups = this.Content (model, screen)
-            let content = Content.screen screen.Name Vanilla definitions groups
+            let content = Content.screen screen.Name false Vanilla definitions groups
             Content.synchronizeScreen initializing reinitializing contentOld content screen screen world
             World.setScreenContent content screen world
 
@@ -3058,7 +3001,7 @@ module GameDispatcherModule =
 
     type World with
 
-        static member inline internal signalGame<'model, 'message, 'command when 'message :> Message and 'command :> Command> signal (game : Game) world =
+        static member inline signalGame<'model, 'message, 'command when 'message :> Message and 'command :> Command> signal (game : Game) world =
             match game.GetDispatcher world with
             | :? GameDispatcher<'model, 'message, 'command> as dispatcher ->
                 Signal.processSignal dispatcher.Message dispatcher.Command (game.ModelGeneric<'model> ()) signal game world
@@ -3080,7 +3023,7 @@ module GameDispatcherModule =
             let definitions = this.Definitions (model, game)
             let screens = this.Content (model, game)
             let content = Content.game definitions screens
-            let initialScreenOpt = Content.synchronizeGame World.setScreenSlide initializing reinitializing contentOld content game game world
+            let initialScreenOpt = Content.synchronizeGame World.selectScreen World.updateScreenIdling World.transitionScreen World.setScreenSlide initializing reinitializing contentOld content game game world
             World.setGameContent content game world
             initialScreenOpt
 

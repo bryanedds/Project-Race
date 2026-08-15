@@ -9,6 +9,8 @@ open System
 open System.Numerics
 open System.Reflection
 open System.Runtime.InteropServices
+open System.Security.Cryptography
+open System.Text
 open System.Threading
 open System.IO
 open FSharp.NativeInterop
@@ -290,8 +292,8 @@ type internal BackgroundingResponseState =
 [<AutoOpen>]
 module Vulkan =
 
-    let mutable private VkInstanceApi = Unchecked.defaultof<VkInstanceApi>
-    let mutable private VkDeviceApi = Unchecked.defaultof<VkDeviceApi>
+    let mutable internal VkInstanceApi = Unchecked.defaultof<VkInstanceApi>
+    let mutable internal VkDeviceApi = Unchecked.defaultof<VkDeviceApi>
 
     /// Set a VkInstanceApi value. Under normal operation, this can never be null.
     let internal SetInstanceApi vkInstanceApi = VkInstanceApi <- vkInstanceApi
@@ -308,8 +310,8 @@ module Vulkan =
 [<RequireQualifiedAccess>]
 module Hl =
 
-    // TODO: P0: these free-floating bindings have become a bit of a mess and need to be reordered or moved into vulkan
-    // context.
+    // TODO: P0: these free-floating bindings have become a bit of a mess and need to be reordered or moved into
+    // VulkanContext.
     let mutable internal ValidationLayersActivated = false
 
     let mutable internal DrawCountersLock = obj ()
@@ -390,11 +392,7 @@ module Hl =
         if int result > 0 then Log.info ("Vulkan info: " + string result)
         elif int result < 0 then
             let message = "Vulkan assertion failed due to: " + string result
-#if DEBUG
-            Log.fail message
-#else
             Log.error message
-#endif
 
     /// Determine whether format is supported for use as an attachment.
     let supportsAttachment vkPhysicalDevice format =
@@ -707,15 +705,24 @@ module Hl =
 
     /// Try to compile GLSL file to SPIR-V code.
     let tryCompileShader shaderPath shaderKind =
-        use shaderStream = new StreamReader (File.OpenRead shaderPath)
-        let shaderStr = shaderStream.ReadToEnd ()
-        use compiler = new Compiler ()
-        let options = CompilerOptions ()
-        options.ShaderStage <- shaderKind
-        let result = compiler.Compile (shaderStr, shaderPath, options)
-        if result.Status = CompilationStatus.Success
-        then Right result.Bytecode
-        else Left ("Vulkan shader compilation failed due to:\n" + result.ErrorMessage)
+        let shaderStr = File.ReadAllText shaderPath
+        let optimizationLevel = if Constants.Render.RenderDebug then OptimizationLevel.Zero else OptimizationLevel.Performance
+        let generatedDebug = Constants.Engine.EngineDebug
+        let cacheKey = shaderStr + scstring shaderKind + "|" + scstring optimizationLevel + "|" + scstring generatedDebug
+        let cacheHash = Convert.ToHexString (SHA256.HashData (Encoding.UTF8.GetBytes cacheKey))
+        try Directory.CreateDirectory "ShaderCache" |> ignore<DirectoryInfo>
+        with exn -> Log.warn ("Failed to create ./ShaderCache directory due to: " + scstring exn)
+        let cachePath = PathF.Combine ("ShaderCache", cacheHash + ".spv")
+        if not (File.Exists cachePath) then
+            use compiler = new Compiler ()
+            let options = CompilerOptions (ShaderStage = shaderKind, OptimizationLevel = optimizationLevel, GeneratedDebug = generatedDebug)
+            let result = compiler.Compile (shaderStr, shaderPath, options)
+            if result.Status = CompilationStatus.Success then
+                try File.WriteAllBytes (cachePath, result.Bytecode)
+                with exn -> Log.warn ("Failed to save SPIR-V bytecode for shader '" + shaderPath + "' due to: " + scstring exn)
+                Right result.Bytecode
+            else Left ("Vulkan shader compilation failed due to:\n" + result.ErrorMessage)
+        else Right (File.ReadAllBytes cachePath)
 
     /// Try to create a shader module from a GLSL file.
     /// TODO: create matching destroy fn and use that?
@@ -766,7 +773,7 @@ module Hl =
              0u, nullPtr, 0u, nullPtr,
              1u, &&barrier)
 
-    /// Try get surface capabilities.
+    /// Attempt to get surface capabilities.
     let tryGetSurfaceCapabilities vkPhysicalDevice =
         let mutable capabilities = Unchecked.defaultof<VkSurfaceCapabilitiesKHR>
         let result = InstanceApi.vkGetPhysicalDeviceSurfaceCapabilitiesKHR (vkPhysicalDevice, Surface, &capabilities)
@@ -777,26 +784,37 @@ module Hl =
             SurfaceState <- SurfaceLost
             None
 
-    /// Get swap extent.
-    let getSwapExtent (capabilities : VkSurfaceCapabilitiesKHR) =
+    /// Attempt to get a valid swap extent.
+    let tryGetSwapExtent (capabilities : VkSurfaceCapabilitiesKHR) =
 
-        // check if window size is fixed or variable
-        if capabilities.currentExtent.width <> UInt32.MaxValue
-        then capabilities.currentExtent
-        else
+        // ensure that extent is valid
+        if capabilities.currentExtent.width <> 0u then
 
-            // get pixel resolution from sdl
-            let mutable width = WindowProperties.WidthPixels
-            let mutable height = WindowProperties.HeightPixels
+            // ensure that extent is variable
+            if capabilities.currentExtent.width = UInt32.MaxValue then
 
-            // clamp resolution to size limits
-            width <- max width (int capabilities.minImageExtent.width)
-            width <- min width (int capabilities.maxImageExtent.width)
-            height <- max height (int capabilities.minImageExtent.height)
-            height <- min height (int capabilities.maxImageExtent.height)
+                // get pixel resolution from sdl
+                let mutable width = WindowProperties.WidthPixels
+                let mutable height = WindowProperties.HeightPixels
 
-            // fin
-            VkExtent2D (width, height)
+                // ensure pixel resolution is valid for use as swap extent
+                if width <> 0 && height <> 0 then
+
+                    // clamp resolution to size limits
+                    width <- max width (int capabilities.minImageExtent.width)
+                    width <- min width (int capabilities.maxImageExtent.width)
+                    height <- max height (int capabilities.minImageExtent.height)
+                    height <- min height (int capabilities.maxImageExtent.height)
+                    Some (VkExtent2D (width, height))
+
+                // invalid
+                else None
+
+            // otherwise it's fixed
+            else Some capabilities.currentExtent
+
+        // otherwise it's invalid
+        else None
 
     /// Create an image view.
     let createImageView pixelFormat vkFormat mipLevel mipCount (layer : int) (layerCount : int) viewType imageAspect image =

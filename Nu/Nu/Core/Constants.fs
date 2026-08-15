@@ -43,8 +43,8 @@ module Assimp =
 [<RequireQualifiedAccess>]
 module Vulkan =
 
-    let [<Uniform>] FramesInFlight = 1 // NOTE: no use of multiple FiF - https://vsynchronicity.wordpress.com/2026/06/25/saying-no-to-multiple-frames-in-flight-in-nu-game-engine/
-    let [<Uniform>] MoltenVk = OperatingSystem.IsIOS () || match ConfigurationManager.AppSettings.["MoltenVk"] with null -> true | value -> scvalue value // NOTE: setting this to false uses KosmicKrisp on macOS, but FPS of Metrics project drops from 50 to 2.
+    let [<Uniform>] FramesInFlight = 1 // NOTE: we avoid the use of multiple FiF in order to keep the renderer simple and low-latency.
+    let [<Uniform>] MoltenVk = OperatingSystem.IsIOS () || match ConfigurationManager.AppSettings["MoltenVk"] with null -> true | value -> scvalue value // NOTE: setting this to false uses KosmicKrisp on macOS, but FPS of Metrics project drops from 50 to 2.
     let [<Literal>] RenderCommandBufferCountDefault = 32
     let [<Literal>] DescriptorSetCountDefault = 32
     let [<Literal>] ShadowSurfaceInstanceThreshold = 1024
@@ -111,7 +111,7 @@ module Engine =
     let [<Uniform>] OctreeSize = Vector3 (OctnodeSize * single (pown 2 OctreeDepth))
     let [<Uniform>] mutable EventTracing = match ConfigurationManager.AppSettings["EventTracing"] with null -> false | value -> scvalue value
     let [<Uniform>] mutable EventFilter = match ConfigurationManager.AppSettings["EventFilter"] with null -> Pass | value -> scvalue value
-    let [<Uniform>] EnvironmentMagnitudeThreshold = 48.0f // sqrt (32^2 + 32^2 + 16^2) = more likely an environment that a static prop
+    let [<Uniform>] EnvironmentMagnitudeThreshold = 48.0f // sqrt (32^2 + 32^2 + 16^2) = more likely an environment than a static prop
     let [<Uniform>] NonPersistentPropertyNames =
         FrozenSet.ToFrozenSet
             ([(* Simulant Properties *)
@@ -162,12 +162,13 @@ module Engine =
               "Light"
               "Optimized"],
              StringComparer.Ordinal)
-    let [<Literal>] BuildName =
+    let [<Literal>] EngineDebug =
 #if DEBUG
-        "Debug"
+        true
 #else
-        "Release"
+        false
 #endif
+    let [<Literal>] BuildName = if EngineDebug then "Debug" else "Release"
 
 [<RequireQualifiedAccess>]
 module Render =
@@ -187,6 +188,7 @@ module Render =
     let [<Literal>] NavShapeName = "NavShape"
     let [<Uniform>] mutable RenderDebug = match ConfigurationManager.AppSettings["RenderDebug"] with null -> false | value -> scvalue value
     let [<Uniform>] mutable RenderVsync = match ConfigurationManager.AppSettings["RenderVsync"] with null -> true | value -> scvalue value
+    let [<Uniform>] mutable StubRenderer3d = match ConfigurationManager.AppSettings["StubRenderer3d"] with null -> false | value -> scvalue value
     let [<Uniform>] mutable NearPlaneDistanceInterior = match ConfigurationManager.AppSettings["NearPlaneDistanceInterior"] with null -> 0.125f | value -> scvalue value
     let [<Uniform>] mutable FarPlaneDistanceInterior = match ConfigurationManager.AppSettings["FarPlaneDistanceInterior"] with null -> 20.0f | value -> scvalue value
     let [<Uniform>] mutable NearPlaneDistanceExterior = match ConfigurationManager.AppSettings["NearPlaneDistanceExterior"] with null -> 20.0f | value -> scvalue value
@@ -207,10 +209,7 @@ module Render =
     let [<Literal>] TexturePriorityDefault = 0.5f // higher priority than (supposed) default, but not maximum. this value is arrived at through experimenting with a Windows NVidia driver.
     let [<Uniform>] mutable TextureAnisotropyMax = match ConfigurationManager.AppSettings["TextureAnisotropyMax"] with null -> 16.0f | value -> scvalue value
     let [<Uniform>] mutable TextureMinimalMipmapIndex = match ConfigurationManager.AppSettings["TextureMinimalMipmapIndex"] with null -> 2 | value -> scvalue value
-    let [<Uniform>] mutable TextureBlockCompression =
-        match ConfigurationManager.AppSettings["TextureBlockCompression"] with
-        | null -> if OperatingSystem.IsMacOS () || OperatingSystem.IsAndroid () || OperatingSystem.IsIOS() then AstcCompression else BcCompression
-        | value -> scvalue value
+    let [<Uniform>] TextureBlockCompression = if OperatingSystem.IsMacOS () || OperatingSystem.IsAndroid () || OperatingSystem.IsIOS() then AstcCompression else BcCompression
     let [<Literal>] SpriteBatchSize = 192 // NOTE: remember to update SPRITE_BATCH_SIZE in shaders when changing this!
     let [<Literal>] SpriteBorderTexelScalar = 0.001f
     let [<Literal>] SpriteMessagesPrealloc = 256
@@ -356,15 +355,14 @@ module Render =
     let [<Literal>] Body3dSegmentRenderMagnitudeMax = 48.0f
     let [<Literal>] Body3dSegmentRenderDistanceMax = 40.0f
     let [<Literal>] Body3dRenderDistanceMax = 32.0f
-    let [<Uniform>] mutable SkipRendering3d = match ConfigurationManager.AppSettings["SkipRendering3d"] with null -> false | value -> scvalue value
 
 [<RequireQualifiedAccess>]
 module Audio =
 
     let [<Literal>] TrackPoolSize = 64
-    let [<Literal>] MasterAudioVolumeDefault = 1.0f
-    let [<Literal>] MasterSoundVolumeDefault = 1.0f
-    let [<Literal>] MasterSongVolumeDefault = 1.0f
+    let [<Uniform>] mutable MasterAudioVolumeDefault = match ConfigurationManager.AppSettings["MasterAudioVolumeDefault"] with null -> 1.0f | value -> scvalue value
+    let [<Uniform>] mutable MasterSoundVolumeDefault = match ConfigurationManager.AppSettings["MasterSoundVolumeDefault"] with null -> 1.0f | value -> scvalue value
+    let [<Uniform>] mutable MasterSongVolumeDefault = match ConfigurationManager.AppSettings["MasterSongVolumeDefault"] with null -> 1.0f | value -> scvalue value
     let [<Literal>] SoundVolumeDefault = 1.0f
     let [<Literal>] SongVolumeDefault = 1.0f
     let [<Uniform>] FadeOutTimeDefault = GameTime.ofSeconds 0.5

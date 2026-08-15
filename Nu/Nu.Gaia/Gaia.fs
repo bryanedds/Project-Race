@@ -23,21 +23,21 @@ open Prime
 open Nu
 open Nu.Gaia
 
-//////////////////////////////////////////////////////////////////////////////////////
-// TODO:                                                                            //
-// Custom properties in order of priority:                                          //
-//  Enums                                                                           //
-//  Flag Enums                                                                      //
-//  CollisionMask                                                                   //
-//  CollisionCategories                                                             //
-//  CollisionDetection                                                              //
-//  BodyShape                                                                       //
-//  BodyJoint                                                                       //
-//  BlendMaterial                                                                   //
-//  TerrainMaterial                                                                 //
-//  DateTimeOffset?                                                                 //
-//  SymbolicCompression                                                             //
-//////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////
+// TODO:                                    //
+// Custom properties in order of priority:  //
+//  Enums                                   //
+//  Flag Enums                              //
+//  CollisionMask                           //
+//  CollisionCategories                     //
+//  CollisionDetection                      //
+//  BodyShape                               //
+//  BodyJoint                               //
+//  BlendMaterial                           //
+//  TerrainMaterial                         //
+//  DateTimeOffset?                         //
+//  SymbolicCompression                     //
+//////////////////////////////////////////////
 
 [<RequireQualifiedAccess>]
 module Gaia =
@@ -1280,21 +1280,14 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1920,1080 Split
                         |> Array.map (fun line -> line.Replace ("/>", ""))
                         |> Array.map (fun line -> line.Replace ("\"", ""))
                         |> Array.map (fun line -> line.Trim ())
-                    let fsprojDllFilePaths =
-                        fsprojFileLines
-                        |> Array.map (fun line -> line.Trim ())
-                        |> Array.filter (fun line -> line.Contains "HintPath" && line.Contains ".dll")
-                        |> Array.map (fun line -> line.Replace ("<HintPath>", ""))
-                        |> Array.map (fun line -> line.Replace ("</HintPath>", ""))
-                        |> Array.map (fun line -> line.Replace ("=", ""))
-                        |> Array.map (fun line -> line.Replace ("\"", ""))
-                        |> Array.map (fun line -> PathF.Normalize line)
-                        |> Array.map (fun line -> line.Trim ())
+                    let fsprojDllFilePaths = // TODO: see if we can pull these from the fsproj as well...
+                        [|"../Nu.Dependencies/AssimpNet/netstandard2.1/AssimpNet.dll"
+                          "../Nu.Dependencies/BulletSharpPInvoke/netstandard2.1/BulletSharp.dll"
+                          "../Nu.Dependencies/TiledSharp/lib/netstandard2.0/TiledSharp.dll"|]
                     let fsprojProjectLines = // TODO: see if we can pull these from the fsproj as well...
-                        ["#r \"../../../../../Nu/Nu.Math/bin/" + Constants.Engine.BuildName + "/" + Constants.Engine.TargetFramework + "/Nu.Math.dll\""
-                         "#r \"../../../../../Nu/Nu.Pipe/bin/" + Constants.Engine.BuildName + "/" + Constants.Engine.TargetFramework + "/Nu.Pipe.dll\""
-                         "#r \"../../../../../Nu/Nu.Spine/bin/" + Constants.Engine.BuildName + "/" + Constants.Engine.TargetFramework + "/Nu.Spine.dll\""
-                         "#r \"../../../../../Nu/Nu/bin/" + Constants.Engine.BuildName + "/" + Constants.Engine.TargetFramework + "/Nu.dll\""]
+                        [|"#r \"../../../../../Nu/Nu.Math/bin/" + Constants.Engine.BuildName + "/" + Constants.Engine.TargetFramework + "/Nu.Math.dll\""
+                          "#r \"../../../../../Nu/Nu.Pipe/bin/" + Constants.Engine.BuildName + "/" + Constants.Engine.TargetFramework + "/Nu.Pipe.dll\""
+                          "#r \"../../../../../Nu/Nu/bin/" + Constants.Engine.BuildName + "/" + Constants.Engine.TargetFramework + "/Nu.dll\""|]
                     let fsprojFsFilePaths =
                         fsprojFileLines
                         |> Array.map (fun line -> line.Trim ())
@@ -1461,13 +1454,13 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1920,1080 Split
                 Log.error ("Invalid Nu Assembly: " + gaiaState.ProjectDllPath)
             (GaiaState.defaultState, ".", gaiaPlugin)
 
-    let private makeWorld sdlDeps worldConfig geometryViewport windowViewport (plugin : NuPlugin) =
+    let private makeWorld sdlDeps worldConfig windowSize geometryViewport windowViewport (plugin : NuPlugin) =
 
         // make the edit context maker
         let tryMakeEditContext = fun () -> Some (makeEditContext None None)
 
         // make the world
-        let world = World.make tryMakeEditContext sdlDeps worldConfig geometryViewport windowViewport plugin
+        let world = World.make tryMakeEditContext sdlDeps worldConfig windowSize geometryViewport windowViewport plugin
 
         // initialize event filter as not to flood the log
         World.setEventFilter Constants.Gaia.EventFilter world
@@ -1488,32 +1481,19 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1920,1080 Split
 
         // figure out which screen to use
         let screen =
-            match Game.GetDesiredScreen world with
-            | Desire screen -> screen
-            | DesireNone ->
-                match Game.GetSelectedScreenOpt world with
-                | None ->
-                    let screen = Game / "Screen"
-                    if not (screen.GetExists world) then
-                        let screen = World.createScreen (Some "Screen") world
-                        Game.SetDesiredScreen (Desire screen) world
-                        screen
-                    else screen
-                | Some screen -> screen
-            | DesireIgnore ->
-                match Game.GetSelectedScreenOpt world with
-                | None ->
-                    let screen = Game / "Screen"
-                    if not (screen.GetExists world) then
-                        let screen = World.createScreen (Some "Screen") world
-                        World.setSelectedScreen screen world
-                        let eventTrace = EventTrace.debug "World" "selectScreen" "Select" EventTrace.empty
-                        World.publishPlus () screen.SelectEvent eventTrace screen false false world
-                        let eventTrace = EventTrace.debug "World" "selectScreen" "PostSelect" EventTrace.empty
-                        World.publishPlus (Some screen) Game.PostSelectEvent eventTrace screen false false world
-                        screen
-                    else screen
-                | Some screen -> screen
+            match Game.GetSelectedScreenOpt world with
+            | None ->
+                let screen = Game / "Screen"
+                if not (screen.GetExists world) then
+                    let screen = World.createScreen (Some "Screen") world
+                    World.setSelectedScreen screen world
+                    let eventTrace = EventTrace.debug "World" "selectScreen" "Select" EventTrace.empty
+                    World.publishPlus () screen.SelectEvent eventTrace screen false false world
+                    let eventTrace = EventTrace.debug "World" "selectScreen" "PostSelect" EventTrace.empty
+                    World.publishPlus (Some screen) Game.PostSelectEvent eventTrace screen false false world
+                    screen
+                else screen
+            | Some screen -> screen
 
         // proceed directly to idle state
         World.selectScreen (IdlingState world.GameTime) screen world
@@ -3216,7 +3196,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1920,1080 Split
             FrameTimings.Dequeue () |> ignore<single>
             if ImPlot.BeginPlot ("FrameTimings", v2 -1.0f -1.0f, ImPlotFlags.NoTitle ||| ImPlotFlags.NoInputs) then
                 ImPlot.SetupLegend (ImPlotLocation.West, ImPlotLegendFlags.Outside)
-                ImPlot.SetupAxesLimits (0.0, double (dec TimingsArray.Length), 0.0, 40.0)
+                ImPlot.SetupAxesLimits (0.0, double (dec TimingsArray.Length), 0.0, 50.0)
                 ImPlot.SetupAxes ("Frame", "Time (ms)", ImPlotAxisFlags.NoLabel ||| ImPlotAxisFlags.NoTickLabels, ImPlotAxisFlags.None)
                 FrameTimings.CopyTo (TimingsArray, 0)
                 ImPlot.PlotLine ("Frame Time", &TimingsArray[0], TimingsArray.Length)
@@ -3715,7 +3695,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1920,1080 Split
                     | "ImSim Game" -> (PathF.GetFullPath (programDir + "/../../../../Nu.Template.ImSim.Game"), "Title", "nu-template-imsim-game")
                     | _ -> failwithumf ()
                 // work around https://github.com/dotnet/sdk/pull/55105 by manual normalization of drive letter
-                let templateDir = if templateDir.Length > 1 && templateDir.[1] = ':' then string (Char.ToUpperInvariant templateDir.[0]) + templateDir.Substring 1 else templateDir
+                let templateDir = if templateDir.Length > 1 && templateDir[1] = ':' then string (Char.ToUpperInvariant templateDir[0]) + templateDir.Substring 1 else templateDir
                 if Directory.Exists templateDir then
 
                     // attempt to create project files
@@ -4574,7 +4554,7 @@ DockSpace           ID=0x7C6B3D9B Window=0xA87D555D Pos=0,0 Size=1920,1080 Split
 
             // attempt to create the world
             let screenAndWorldOpt =
-                try let screenAndworld = makeWorld sdlDeps worldConfig geometryViewport windowViewport plugin
+                try let screenAndworld = makeWorld sdlDeps worldConfig windowSize geometryViewport windowViewport plugin
                     Right screenAndworld
                 with exn ->
                     let gaiaDirPath = PathF.GetDirectoryName (Assembly.GetExecutingAssembly ()).Location

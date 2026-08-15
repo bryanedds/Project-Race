@@ -897,40 +897,46 @@ type private SortableLightMap =
                 lightMapEnvironmentFilterMaps[i] <- lightMap.SortableLightMapEnvironmentFilterMap
         (lightMapOrigins, lightMapMins, lightMapSizes, lightMapAmbientColors, lightMapAmbientBrightnesses, lightMapIrradianceMaps, lightMapEnvironmentFilterMaps)
 
+/// A sortable light 'projection' used for sorting lights by desirability for rendering.
 [<CustomComparison; CustomEquality>]
 type private SortableLightProjection =
     { DirectionalWeight : int
       LightDistance : single
       DesiredShadowsWeight : int }
 
+    /// Compare two sortable light projections for equality.
     static member equals left right =
         left.DirectionalWeight = right.DirectionalWeight &&
         left.LightDistance = right.LightDistance &&
         left.DesiredShadowsWeight = right.DesiredShadowsWeight
 
+    /// Compare two sortable light projections for ordering.
     static member compare left right =
-        if left.DirectionalWeight < right.DirectionalWeight then 1
-        elif left.DirectionalWeight > right.DirectionalWeight then -1
+        if left.DirectionalWeight < right.DirectionalWeight then -1
+        elif left.DirectionalWeight > right.DirectionalWeight then 1
         elif left.LightDistance < right.LightDistance then -1
         elif left.LightDistance > right.LightDistance then 1
         elif left.DesiredShadowsWeight < right.DesiredShadowsWeight then -1
         elif left.DesiredShadowsWeight > right.DesiredShadowsWeight then 1
         else 0
 
+    /// Make a sortable light projection.
     static member make directionalWeight lightDistance desiredShadowsWeight =
-        { DirectionalWeight = directionalWeight; LightDistance = lightDistance; DesiredShadowsWeight = desiredShadowsWeight }
+        { DirectionalWeight = directionalWeight
+          LightDistance = lightDistance
+          DesiredShadowsWeight = desiredShadowsWeight }
 
     override this.Equals that =
         match that with
         | :? SortableLightProjection as that -> SortableLightProjection.equals this that
         | _ -> false
 
-    override x.GetHashCode () =
-        HashCode.Combine(x.DirectionalWeight, x.LightDistance, x.DesiredShadowsWeight)
+    override this.GetHashCode () =
+        HashCode.Combine (this.DirectionalWeight, this.LightDistance, this.DesiredShadowsWeight)
 
     interface IComparable<SortableLightProjection> with
         member this.CompareTo that =
-            compare this.DesiredShadowsWeight that.DesiredShadowsWeight
+            SortableLightProjection.compare this that
 
     interface IComparable with
         member this.CompareTo that =
@@ -957,7 +963,6 @@ type private SortableLight =
       SortableLightDesireFog : int
       mutable SortableLightDistance : single }
 
-    // TODO: P0: put the result in a struct with a comparison definition that doesn't allocate.
     static member private project light =
         let directionalWeight = match light.SortableLightType with 2 -> -1 | _ -> 0
         let desiredShadowsWeight = -light.SortableLightDesireShadows
@@ -4327,8 +4332,6 @@ type [<ReferenceEquality>] VulkanRenderer3d =
                 Texture.recordTransitionLayout ColorAttachmentWrite ColorAttachmentRead fogAccumTexture renderer.VulkanContext.RenderCommandBuffer
 
                 // deferred render down-sample filter quad to down-sample texture
-                // TODO: P0: verify that down-sampling the depth texture is actually beneficial and the shader is
-                // correctly utilizing depth comparison.
                 let downSampleColorTexture = renderer.PhysicallyBasedAttachments.DownSampleColorAttachment
                 let downSampleDepthTexture = renderer.PhysicallyBasedAttachments.DownSampleDepthAttachment
                 Texture.recordTransitionLayout ColorAttachmentRead ColorAttachmentWrite downSampleColorTexture renderer.VulkanContext.RenderCommandBuffer
@@ -4625,7 +4628,7 @@ type [<ReferenceEquality>] VulkanRenderer3d =
             Texture.recordTransitionLayout TransferSrc ColorAttachmentRead colorFull0Texture renderer.VulkanContext.RenderCommandBuffer
             Texture.recordTransitionLayout TransferDst ColorAttachmentRead compositionTexture renderer.VulkanContext.RenderCommandBuffer
 
-        // run tone-mapping pass when appropriate
+        // run tone-mapping pass
         let toneMappingTexture = renderer.PhysicallyBasedAttachments.ToneMappingAttachment
         Texture.recordTransitionLayout ColorAttachmentRead ColorAttachmentWrite toneMappingTexture renderer.VulkanContext.RenderCommandBuffer
         PhysicallyBased.drawFilterToneMappingSurface
